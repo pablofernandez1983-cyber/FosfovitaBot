@@ -26,7 +26,7 @@ TZ = pytz.timezone("America/Argentina/Buenos_Aires")
 
 # Clients
 genai.configure(api_key=GEMINI_API_KEY)
-gemini  = genai.GenerativeModel("gemini-2.0-flash")
+gemini  = genai.GenerativeModel("gemini-1.5-flash")
 supabase = create_client(SUPABASE_URL, SUPABASE_KEY)
 
 # Scheduler en memoria (jobs se persisten en Supabase)
@@ -98,13 +98,16 @@ Reglas:
 - "a la tardecita" = 18:00, "a la mañana" = 09:00, "al mediodía" = 12:00
 - "en X minutos/horas" = ahora + X
 """
-    response = gemini.generate_content(prompt)
-    text = response.text.strip()
-    text = re.sub(r"```json|```", "", text).strip()
     try:
+        response = gemini.generate_content(prompt)
+        text = response.text.strip()
+        text = re.sub(r"```json|```", "", text).strip()
         return json.loads(text)
-    except Exception:
+    except json.JSONDecodeError:
         logger.error(f"Error parseando JSON de Gemini: {text}")
+        return None
+    except Exception as e:
+        logger.error(f"Error llamando a Gemini: {e}")
         return None
 
 def analyze_image_with_gemini(image_bytes: bytes, mime_type: str, caption: str = "") -> str:
@@ -153,6 +156,10 @@ async def handle_text(update: Update, context: ContextTypes.DEFAULT_TYPE):
     now     = datetime.now(TZ)
 
     parsed = parse_reminder_with_gemini(text, now)
+
+    if parsed is None:
+        await update.message.reply_text("⚠️ No pude procesar tu mensaje ahora (límite de API). Intentá en un momento.")
+        return
 
     if parsed and parsed.get("es_recordatorio"):
         try:
