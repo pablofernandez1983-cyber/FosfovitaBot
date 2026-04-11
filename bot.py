@@ -5,7 +5,7 @@ import uuid
 from datetime import datetime
 import pytz
 import httpx
-from telegram import Update, Bot
+from telegram import Update, Bot, MenuButtonWebApp, WebAppInfo
 from telegram.ext import Application, MessageHandler, CommandHandler, filters, ContextTypes
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
 from supabase import create_client
@@ -17,10 +17,11 @@ logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(levelname)s - %(
 logger = logging.getLogger(__name__)
 
 # Config
-TELEGRAM_TOKEN = os.environ["TELEGRAM_TOKEN"]
-GEMINI_API_KEY = os.environ["GEMINI_API_KEY"]
-SUPABASE_URL   = os.environ["SUPABASE_URL"]
-SUPABASE_KEY   = os.environ["SUPABASE_KEY"]
+TELEGRAM_TOKEN  = os.environ["TELEGRAM_TOKEN"]
+GEMINI_API_KEY  = os.environ["GEMINI_API_KEY"]
+SUPABASE_URL    = os.environ["SUPABASE_URL"]
+SUPABASE_KEY    = os.environ["SUPABASE_KEY"]
+MINI_APP_URL    = os.environ.get("MINI_APP_URL", "")  # URL de GitHub Pages, ej: https://usuario.github.io/fosfovita-bot
 # Soporta uno o varios IDs separados por coma: "123456,789012"
 # Si está vacío o es "0", permite a todos
 _raw_ids = os.environ.get("ALLOWED_USER_IDS", os.environ.get("ALLOWED_USER_ID", "0"))
@@ -211,6 +212,16 @@ Reglas de fecha:
 # ─────────────────────────────────────────────
 
 async def send_reminder(chat_id: int, text: str, job_id: str):
+    # Verificar que el recordatorio no fue eliminado desde la Mini App
+    result = supabase.table("recordatorios")\
+        .select("job_id")\
+        .eq("job_id", job_id)\
+        .eq("enviado", False)\
+        .execute()
+    if not result.data:
+        logger.info(f"Recordatorio {job_id} ya fue eliminado o marcado — no se envía")
+        return
+
     bot = Bot(token=TELEGRAM_TOKEN)
     await bot.send_message(
         chat_id=chat_id,
@@ -514,6 +525,20 @@ async def post_init(app: Application) -> None:
             restored += 1
 
     logger.info(f"Recordatorios restaurados: {restored} futuros, {expired} enviados tardíos")
+
+    # Configurar botón de Mini App si se definió la URL
+    if MINI_APP_URL:
+        try:
+            await app.bot.set_chat_menu_button(
+                menu_button=MenuButtonWebApp(
+                    text="📋 Recordatorios",
+                    web_app=WebAppInfo(url=MINI_APP_URL),
+                )
+            )
+            logger.info(f"Mini App button configurado: {MINI_APP_URL}")
+        except Exception as e:
+            logger.warning(f"No se pudo configurar el botón de Mini App: {e}")
+
     logger.info("Bot iniciado ✅")
 
 # ─────────────────────────────────────────────

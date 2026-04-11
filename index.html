@@ -1,0 +1,413 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Recordatorios</title>
+  <script src="https://telegram.org/js/telegram-web-app.js"></script>
+  <style>
+    :root {
+      --bg:       var(--tg-theme-bg-color, #ffffff);
+      --bg2:      var(--tg-theme-secondary-bg-color, #f1f1f1);
+      --text:     var(--tg-theme-text-color, #000000);
+      --hint:     var(--tg-theme-hint-color, #999999);
+      --accent:   var(--tg-theme-button-color, #2481cc);
+      --btn-text: var(--tg-theme-button-text-color, #ffffff);
+      --link:     var(--tg-theme-link-color, #2481cc);
+      --border:   rgba(0,0,0,0.08);
+    }
+
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      background: var(--bg);
+      color: var(--text);
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+      font-size: 15px;
+      min-height: 100vh;
+    }
+
+    header {
+      background: var(--bg2);
+      padding: 14px 16px 12px;
+      border-bottom: 1px solid var(--border);
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      position: sticky;
+      top: 0;
+      z-index: 10;
+    }
+
+    header h1 {
+      font-size: 17px;
+      font-weight: 600;
+    }
+
+    #refresh-btn {
+      background: none;
+      border: none;
+      cursor: pointer;
+      color: var(--accent);
+      font-size: 20px;
+      padding: 4px;
+      line-height: 1;
+    }
+
+    #main {
+      padding: 12px 0;
+    }
+
+    /* ── Estados ── */
+    .state {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      padding: 60px 24px;
+      gap: 12px;
+      color: var(--hint);
+      text-align: center;
+    }
+    .state .icon { font-size: 40px; }
+    .state p { font-size: 14px; line-height: 1.4; }
+
+    /* ── Lista ── */
+    #list { padding: 0 12px; display: flex; flex-direction: column; gap: 8px; }
+
+    .card {
+      background: var(--bg2);
+      border-radius: 12px;
+      padding: 12px 14px;
+      display: flex;
+      align-items: flex-start;
+      gap: 12px;
+      animation: slideIn 0.18s ease;
+    }
+    @keyframes slideIn {
+      from { opacity: 0; transform: translateY(6px); }
+      to   { opacity: 1; transform: translateY(0); }
+    }
+
+    .card .bell {
+      font-size: 22px;
+      flex-shrink: 0;
+      margin-top: 1px;
+    }
+
+    .card .info { flex: 1; min-width: 0; }
+
+    .card .time {
+      font-size: 12px;
+      font-weight: 600;
+      color: var(--accent);
+      margin-bottom: 3px;
+      text-transform: capitalize;
+    }
+    .card .time.soon { color: #e8523a; }
+    .card .time.today { color: #e09a1a; }
+
+    .card .texto {
+      font-size: 14px;
+      line-height: 1.35;
+      word-break: break-word;
+    }
+
+    .card .actions {
+      display: flex;
+      flex-direction: column;
+      gap: 6px;
+      flex-shrink: 0;
+    }
+
+    .btn-del, .btn-done {
+      border: none;
+      border-radius: 8px;
+      cursor: pointer;
+      font-size: 16px;
+      width: 32px;
+      height: 32px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      transition: opacity 0.15s;
+    }
+    .btn-del  { background: rgba(232,82,58,0.12); }
+    .btn-done { background: rgba(46,186,86,0.12); }
+    .btn-del:active, .btn-done:active { opacity: 0.5; }
+
+    /* ── Sección "hoy" / "próximos" ── */
+    .section-label {
+      font-size: 11px;
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: 0.06em;
+      color: var(--hint);
+      padding: 10px 12px 4px;
+    }
+
+    /* ── Spinner ── */
+    .spinner {
+      width: 28px; height: 28px;
+      border: 3px solid var(--border);
+      border-top-color: var(--accent);
+      border-radius: 50%;
+      animation: spin 0.7s linear infinite;
+    }
+    @keyframes spin { to { transform: rotate(360deg); } }
+  </style>
+</head>
+<body>
+
+<header>
+  <h1>🔔 Mis Recordatorios</h1>
+  <button id="refresh-btn" title="Actualizar">↻</button>
+</header>
+
+<div id="main">
+  <div class="state"><div class="spinner"></div></div>
+</div>
+
+<script>
+// ────────────────────────────────────────────
+// CONFIG — reemplazá los valores de abajo
+// ────────────────────────────────────────────
+const SUPABASE_URL      = "https://zqwkznlgbkofsrygqezk.supabase.co";
+const SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Inpxd2t6bmxnYmtvZnNyeWdxZXprIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzU1MTAzMTAsImV4cCI6MjA5MTA4NjMxMH0.GNt-G_RUcxLYCpSqAKKI4KxNU87bBEQAJVCr88R2wQE";
+
+// ────────────────────────────────────────────
+// Telegram WebApp init
+// ────────────────────────────────────────────
+const tg = window.Telegram.WebApp;
+tg.ready();
+tg.expand();
+
+// Obtener chat_id del usuario autenticado por Telegram
+const tgUser = tg.initDataUnsafe?.user;
+const CHAT_ID = tgUser?.id ?? null;
+
+// ────────────────────────────────────────────
+// Supabase REST helpers
+// ────────────────────────────────────────────
+const HEADERS = {
+  "apikey":        SUPABASE_ANON_KEY,
+  "Authorization": `Bearer ${SUPABASE_ANON_KEY}`,
+  "Content-Type":  "application/json",
+};
+
+async function fetchReminders() {
+  if (!CHAT_ID) return [];
+  const url = `${SUPABASE_URL}/rest/v1/recordatorios?chat_id=eq.${CHAT_ID}&enviado=eq.false&order=scheduled_at.asc&select=*`;
+  const res = await fetch(url, { headers: HEADERS });
+  if (!res.ok) throw new Error(`HTTP ${res.status}`);
+  return res.json();
+}
+
+async function deleteReminder(jobId) {
+  const url = `${SUPABASE_URL}/rest/v1/recordatorios?job_id=eq.${encodeURIComponent(jobId)}&chat_id=eq.${CHAT_ID}`;
+  const res = await fetch(url, { method: "DELETE", headers: HEADERS });
+  if (!res.ok) throw new Error(`HTTP ${res.status}`);
+}
+
+async function markDone(jobId) {
+  const url = `${SUPABASE_URL}/rest/v1/recordatorios?job_id=eq.${encodeURIComponent(jobId)}&chat_id=eq.${CHAT_ID}`;
+  const res = await fetch(url, {
+    method: "PATCH",
+    headers: HEADERS,
+    body: JSON.stringify({ enviado: true }),
+  });
+  if (!res.ok) throw new Error(`HTTP ${res.status}`);
+}
+
+// ────────────────────────────────────────────
+// Formatear fecha
+// ────────────────────────────────────────────
+const DIAS  = ["domingo","lunes","martes","miércoles","jueves","viernes","sábado"];
+const MESES = ["ene","feb","mar","abr","may","jun","jul","ago","sep","oct","nov","dic"];
+
+function formatDate(isoStr) {
+  const now  = new Date();
+  const date = new Date(isoStr);
+  const diff = (date - now) / 1000; // segundos
+
+  const hh = date.getHours().toString().padStart(2,"0");
+  const mm = date.getMinutes().toString().padStart(2,"0");
+  const hora = `${hh}:${mm}`;
+
+  const esMismodia = date.toDateString() === now.toDateString();
+  const manana = new Date(now); manana.setDate(manana.getDate()+1);
+  const esMañana = date.toDateString() === manana.toDateString();
+
+  let label;
+  if (diff < 0)           label = `hace un momento · ${hora}`;
+  else if (diff < 3600)   label = `en ${Math.round(diff/60)} min · ${hora}`;
+  else if (esMismodia)    label = `hoy · ${hora}`;
+  else if (esMañana)      label = `mañana · ${hora}`;
+  else {
+    const dia = DIAS[date.getDay()];
+    const d   = date.getDate();
+    const mes = MESES[date.getMonth()];
+    label = `${dia} ${d} ${mes} · ${hora}`;
+  }
+
+  let cls = "";
+  if (diff < 0)           cls = "soon";   // ya pasó (no enviado = raro)
+  else if (diff < 3600)   cls = "soon";   // < 1h
+  else if (esMismodia)    cls = "today";  // hoy pero más tarde
+
+  return { label, cls };
+}
+
+// ────────────────────────────────────────────
+// Render
+// ────────────────────────────────────────────
+const main = document.getElementById("main");
+
+function setHtml(html) { main.innerHTML = html; }
+
+function renderEmpty() {
+  setHtml(`
+    <div class="state">
+      <div class="icon">🎉</div>
+      <p>No tenés recordatorios pendientes.<br>Escribile al bot para crear uno.</p>
+    </div>`);
+}
+
+function renderError(msg) {
+  setHtml(`
+    <div class="state">
+      <div class="icon">⚠️</div>
+      <p>${msg}</p>
+    </div>`);
+}
+
+function renderList(reminders) {
+  if (!reminders.length) { renderEmpty(); return; }
+
+  const now = new Date();
+  const todayEnd = new Date(now); todayEnd.setHours(23,59,59,999);
+
+  const hoy      = reminders.filter(r => new Date(r.scheduled_at) <= todayEnd);
+  const proximos = reminders.filter(r => new Date(r.scheduled_at) >  todayEnd);
+
+  let html = '<div id="list">';
+
+  function cardHtml(r) {
+    const { label, cls } = formatDate(r.scheduled_at);
+    const timeClass = cls ? ` ${cls}` : "";
+    // Escapar texto
+    const texto = r.texto.replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;");
+    return `
+      <div class="card" id="card-${r.job_id.substring(0,8)}">
+        <div class="bell">🔔</div>
+        <div class="info">
+          <div class="time${timeClass}">${label}</div>
+          <div class="texto">${texto}</div>
+        </div>
+        <div class="actions">
+          <button class="btn-done" title="Marcar hecho"    data-id="${r.job_id}">✓</button>
+          <button class="btn-del"  title="Eliminar"        data-id="${r.job_id}">✕</button>
+        </div>
+      </div>`;
+  }
+
+  if (hoy.length) {
+    html += '<div class="section-label">Hoy</div>';
+    hoy.forEach(r => { html += cardHtml(r); });
+  }
+  if (proximos.length) {
+    html += '<div class="section-label">Próximos</div>';
+    proximos.forEach(r => { html += cardHtml(r); });
+  }
+
+  html += "</div>";
+  setHtml(html);
+
+  // Event listeners para botones
+  document.querySelectorAll(".btn-del").forEach(btn => {
+    btn.addEventListener("click", async () => {
+      const jobId = btn.getAttribute("data-id");
+      const shortId = jobId.substring(0,8);
+      btn.disabled = true;
+      btn.textContent = "…";
+      try {
+        await deleteReminder(jobId);
+        tg.HapticFeedback?.impactOccurred("medium");
+        const card = document.getElementById(`card-${shortId}`);
+        if (card) {
+          card.style.transition = "opacity 0.2s, transform 0.2s";
+          card.style.opacity    = "0";
+          card.style.transform  = "translateX(20px)";
+          setTimeout(() => { card.remove(); checkEmpty(); }, 200);
+        }
+      } catch(e) {
+        btn.disabled    = false;
+        btn.textContent = "✕";
+        tg.showAlert?.(`No se pudo eliminar: ${e.message}`);
+      }
+    });
+  });
+
+  document.querySelectorAll(".btn-done").forEach(btn => {
+    btn.addEventListener("click", async () => {
+      const jobId = btn.getAttribute("data-id");
+      const shortId = jobId.substring(0,8);
+      btn.disabled = true;
+      btn.textContent = "…";
+      try {
+        await markDone(jobId);
+        tg.HapticFeedback?.impactOccurred("light");
+        const card = document.getElementById(`card-${shortId}`);
+        if (card) {
+          card.style.transition = "opacity 0.2s";
+          card.style.opacity    = "0";
+          setTimeout(() => { card.remove(); checkEmpty(); }, 200);
+        }
+      } catch(e) {
+        btn.disabled    = false;
+        btn.textContent = "✓";
+        tg.showAlert?.(`No se pudo marcar: ${e.message}`);
+      }
+    });
+  });
+}
+
+function checkEmpty() {
+  const cards = document.querySelectorAll(".card");
+  const labels = document.querySelectorAll(".section-label");
+  // Limpiar labels de secciones vacías
+  labels.forEach(lbl => {
+    let next = lbl.nextElementSibling;
+    while (next && next.classList.contains("section-label")) next = next.nextElementSibling;
+    if (!next || !next.classList.contains("card")) lbl.remove();
+  });
+  if (!document.querySelectorAll(".card").length) renderEmpty();
+}
+
+// ────────────────────────────────────────────
+// Load data
+// ────────────────────────────────────────────
+async function load() {
+  setHtml('<div class="state"><div class="spinner"></div></div>');
+  try {
+    if (!CHAT_ID) {
+      renderError("No se pudo identificar tu usuario de Telegram.<br>Abrí esta página desde el bot.");
+      return;
+    }
+    if (SUPABASE_URL.includes("TU_") || SUPABASE_ANON_KEY.includes("TU_")) {
+      renderError("Falta configurar las credenciales de Supabase en el archivo index.html.");
+      return;
+    }
+    const data = await fetchReminders();
+    renderList(data);
+  } catch(e) {
+    renderError(`Error cargando recordatorios:<br>${e.message}`);
+  }
+}
+
+document.getElementById("refresh-btn").addEventListener("click", load);
+
+load();
+</script>
+</body>
+</html>
