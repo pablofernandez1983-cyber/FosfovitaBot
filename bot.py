@@ -100,13 +100,18 @@ def get_nombre_usuario(chat_id: int) -> str:
 # GEMINI helpers
 # ─────────────────────────────────────────────
 
-async def _gemini_post(payload: dict, timeout: int = 45) -> str:
+async def _gemini_post(payload: dict, timeout: int = 45, notify_cb=None) -> str:
     """Llama a Gemini via REST con retry automático en caso de 429."""
     waits = [20, 40, 65]  # segundos de espera entre reintentos (RPM se resetea cada 60s)
     last_err = None
     for attempt, wait in enumerate([0] + waits):
         if wait:
             logger.warning(f"Gemini 429 — esperando {wait}s antes del intento {attempt+1}")
+            if notify_cb:
+                try:
+                    await notify_cb(wait)
+                except Exception:
+                    pass
             await asyncio.sleep(wait)
         try:
             async with httpx.AsyncClient(timeout=timeout) as client:
@@ -123,12 +128,12 @@ async def _gemini_post(payload: dict, timeout: int = 45) -> str:
             raise
     raise last_err
 
-async def _gemini_text(prompt: str) -> str:
+async def _gemini_text(prompt: str, notify_cb=None) -> str:
     """Llama a Gemini via REST y devuelve el texto de la respuesta."""
     payload = {"contents": [{"parts": [{"text": prompt}]}]}
-    return await _gemini_post(payload, timeout=30)
+    return await _gemini_post(payload, timeout=30, notify_cb=notify_cb)
 
-async def _gemini_media(media_bytes: bytes, mime_type: str, prompt: str) -> str:
+async def _gemini_media(media_bytes: bytes, mime_type: str, prompt: str, notify_cb=None) -> str:
     """Llama a Gemini con audio o imagen + texto via REST."""
     import base64
     b64 = base64.b64encode(media_bytes).decode()
@@ -136,9 +141,9 @@ async def _gemini_media(media_bytes: bytes, mime_type: str, prompt: str) -> str:
         {"inline_data": {"mime_type": mime_type, "data": b64}},
         {"text": prompt},
     ]}]}
-    return await _gemini_post(payload, timeout=45)
+    return await _gemini_post(payload, timeout=45, notify_cb=notify_cb)
 
-async def parse_reminder_with_gemini(user_text: str, now: datetime) -> dict | None:
+async def parse_reminder_with_gemini(user_text: str, now: datetime, notify_cb=None) -> dict | None:
     """Extrae fecha/hora y texto del recordatorio usando Gemini."""
     prompt = f"""Hoy es {now.strftime('%A %d/%m/%Y %H:%M')} (hora Argentina, UTC-3).
 
@@ -169,7 +174,7 @@ Reglas de fecha:
 - si NO se menciona ninguna hora ni fecha = exactamente 1 hora desde ahora
 """
     try:
-        text = await _gemini_text(prompt)
+        text = await _gemini_text(prompt, notify_cb=notify_cb)
         text = re.sub(r"```json|```", "", text).strip()
         return json.loads(text)
     except json.JSONDecodeError:
@@ -179,19 +184,19 @@ Reglas de fecha:
         logger.error(f"Error llamando a Gemini: {e}")
         return None
 
-async def analyze_image_with_gemini(image_bytes: bytes, mime_type: str, caption: str = "") -> str:
+async def analyze_image_with_gemini(image_bytes: bytes, mime_type: str, caption: str = "", notify_cb=None) -> str:
     """Analiza una imagen y devuelve descripción o respuesta."""
     prompt = caption if caption else "Describí esta imagen en detalle en español."
     if any(w in caption.lower() for w in ["recordame", "recordá", "recorda", "reminder"]):
         prompt = f"""El usuario mandó esta imagen con el mensaje: "{caption}"
 Describí qué hay en la imagen y si hay fechas, eventos, o información relevante para un recordatorio."""
     try:
-        return await _gemini_media(image_bytes, mime_type, prompt)
+        return await _gemini_media(image_bytes, mime_type, prompt, notify_cb=notify_cb)
     except Exception as e:
         logger.error(f"Error analizando imagen con Gemini: {e}")
         return "No pude analizar la imagen en este momento."
 
-async def analyze_voice_with_gemini(audio_bytes: bytes, now: datetime) -> dict:
+async def analyze_voice_with_gemini(audio_bytes: bytes, now: datetime, notify_cb=None) -> dict:
     """
     Transcribe y analiza un mensaje de voz.
     Devuelve dict con 'transcripcion' y opcionalmente datos de recordatorio.
@@ -214,7 +219,7 @@ Reglas de fecha:
 - si NO se menciona ninguna hora ni fecha = exactamente 1 hora desde ahora
 """
     try:
-        text = await _gemini_media(audio_bytes, "audio/ogg", prompt)
+        text = await _gemini_media(audio_bytes, "audio/ogg", prompt, notify_cb=notify_cb)
         text = re.sub(r"```json|```", "", text).strip()
         return json.loads(text)
     except json.JSONDecodeError:
@@ -265,7 +270,14 @@ async def handle_text(update: Update, context: ContextTypes.DEFAULT_TYPE):
     chat_id = update.effective_chat.id
     now     = datetime.now(TZ)
 
-    parsed = await parse_reminder_with_gemini(text, now)
+    _notified = False
+    async def notify(secs):
+        nonlocal _notified
+        if not _notified:
+            await update.message.reply_text("⏳ La API está ocupada, esperá un momento y lo proceso...")
+            _notified = True
+
+    parsed = await parse_reminder_with_gemini(text, now, notify_cb=notify)
 
     if parsed is None:
         await update.message.reply_text("⚠️ No pude procesar tu mensaje ahora (límite de API). Intentá en un momento.")
@@ -280,7 +292,8 @@ async def handle_text(update: Update, context: ContextTypes.DEFAULT_TYPE):
     else:
         try:
             response = await _gemini_text(
-                f"Sos un asistente personal amigable. Respondé en español rioplatense, breve y directo.\n\nUsuario: {text}"
+                f"Sos un asistente personal amigable. Respondé en español rioplatense, breve y directo.\n\nUsuario: {text}",
+                notify_cb=notify,
             )
             await update.message.reply_text(response)
         except Exception as e:
@@ -295,15 +308,22 @@ async def handle_photo(update: Update, context: ContextTypes.DEFAULT_TYPE):
     caption = update.message.caption or ""
     now     = datetime.now(TZ)
 
-    photo      = update.message.photo[-1]
-    file       = await context.bot.get_file(photo.file_id)
+    _notified = False
+    async def notify(secs):
+        nonlocal _notified
+        if not _notified:
+            await update.message.reply_text("⏳ La API está ocupada, esperá un momento y lo proceso...")
+            _notified = True
+
+    photo       = update.message.photo[-1]
+    file        = await context.bot.get_file(photo.file_id)
     image_bytes = await file.download_as_bytearray()
 
-    analysis = await analyze_image_with_gemini(bytes(image_bytes), "image/jpeg", caption)
+    analysis = await analyze_image_with_gemini(bytes(image_bytes), "image/jpeg", caption, notify_cb=notify)
 
     if any(w in caption.lower() for w in ["recordame", "recordá", "recorda", "recordale"]):
         combined_text = f"{caption} — Imagen: {analysis}"
-        parsed = await parse_reminder_with_gemini(combined_text, now)
+        parsed = await parse_reminder_with_gemini(combined_text, now, notify_cb=notify)
         if parsed and parsed.get("es_recordatorio"):
             try:
                 await agendar_recordatorio(update, parsed, chat_id)
@@ -322,11 +342,18 @@ async def handle_voice(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     await update.message.reply_text("🎙️ Escuchando...")
 
+    _notified = False
+    async def notify(secs):
+        nonlocal _notified
+        if not _notified:
+            await update.message.reply_text("⏳ La API está ocupada, esperá un momento y lo proceso...")
+            _notified = True
+
     voice = update.message.voice
     file  = await context.bot.get_file(voice.file_id)
     audio_bytes = await file.download_as_bytearray()
 
-    result = await analyze_voice_with_gemini(bytes(audio_bytes), now)
+    result = await analyze_voice_with_gemini(bytes(audio_bytes), now, notify_cb=notify)
 
     if result is None:
         await update.message.reply_text("⚠️ No pude procesar el audio ahora. Intentá en un momento.")
