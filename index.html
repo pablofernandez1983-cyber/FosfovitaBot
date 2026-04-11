@@ -40,8 +40,7 @@
     }
 
     .header-logo {
-      width: 48px;
-      height: 48px;
+      width: 48px; height: 48px;
       border-radius: 12px;
       object-fit: cover;
       box-shadow: 0 2px 8px rgba(0,0,0,0.2);
@@ -49,34 +48,16 @@
     }
 
     .header-info { flex: 1; }
-
-    .header-info h1 {
-      font-size: 18px;
-      font-weight: 700;
-      color: #fff;
-      line-height: 1.1;
-    }
-
-    .header-info p {
-      font-size: 11px;
-      color: rgba(255,255,255,0.8);
-      margin-top: 2px;
-    }
+    .header-info h1 { font-size: 18px; font-weight: 700; color: #fff; line-height: 1.1; }
+    .header-info p  { font-size: 11px; color: rgba(255,255,255,0.8); margin-top: 2px; }
 
     #refresh-btn {
       background: rgba(255,255,255,0.2);
-      border: none;
-      border-radius: 10px;
-      cursor: pointer;
-      color: #fff;
-      font-size: 18px;
-      width: 36px;
-      height: 36px;
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      flex-shrink: 0;
-      transition: background 0.15s;
+      border: none; border-radius: 10px; cursor: pointer;
+      color: #fff; font-size: 18px;
+      width: 36px; height: 36px;
+      display: flex; align-items: center; justify-content: center;
+      flex-shrink: 0; transition: background 0.15s;
     }
     #refresh-btn:active { background: rgba(255,255,255,0.35); }
 
@@ -85,43 +66,19 @@
 
     /* ── ESTADOS ── */
     .state {
-      display: flex;
-      flex-direction: column;
-      align-items: center;
-      justify-content: center;
-      padding: 60px 24px;
-      gap: 14px;
-      text-align: center;
+      display: flex; flex-direction: column;
+      align-items: center; justify-content: center;
+      padding: 60px 24px; gap: 14px; text-align: center;
     }
-
-    .state-logo {
-      width: 80px;
-      height: 80px;
-      border-radius: 20px;
-      object-fit: cover;
-      box-shadow: 0 4px 16px rgba(232,82,58,0.2);
-    }
-
-    .state h2 {
-      font-size: 16px;
-      font-weight: 600;
-      color: var(--text);
-    }
-
-    .state p {
-      font-size: 13px;
-      color: var(--hint);
-      line-height: 1.5;
-    }
+    .state-logo { width: 80px; height: 80px; border-radius: 20px; object-fit: cover; box-shadow: 0 4px 16px rgba(232,82,58,0.2); }
+    .state h2   { font-size: 16px; font-weight: 600; color: var(--text); }
+    .state p    { font-size: 13px; color: var(--hint); line-height: 1.5; }
 
     /* ── SECTION LABEL ── */
     .section-label {
-      font-size: 11px;
-      font-weight: 700;
-      text-transform: uppercase;
-      letter-spacing: 0.07em;
-      color: var(--hint);
-      padding: 14px 4px 6px;
+      font-size: 11px; font-weight: 700;
+      text-transform: uppercase; letter-spacing: 0.07em;
+      color: var(--hint); padding: 14px 4px 6px;
     }
 
     /* ── CARDS ── */
@@ -130,83 +87,93 @@
     .card {
       background: var(--bg2);
       border-radius: 14px;
-      padding: 13px 14px;
-      display: flex;
-      align-items: flex-start;
-      gap: 11px;
+      overflow: hidden;
       box-shadow: 0 1px 4px rgba(0,0,0,0.06);
       animation: slideIn 0.18s ease;
     }
-
     @keyframes slideIn {
       from { opacity: 0; transform: translateY(8px); }
       to   { opacity: 1; transform: translateY(0); }
     }
 
-    .card-left {
-      display: flex;
-      flex-direction: column;
-      align-items: center;
-      gap: 4px;
-      flex-shrink: 0;
+    .card-main {
+      padding: 13px 14px;
+      display: flex; align-items: flex-start; gap: 11px;
     }
 
     .card-bell {
-      width: 38px;
-      height: 38px;
-      border-radius: 10px;
+      width: 38px; height: 38px; border-radius: 10px;
       background: linear-gradient(135deg, #e8523a, #f5a623);
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      font-size: 18px;
+      display: flex; align-items: center; justify-content: center;
+      font-size: 18px; flex-shrink: 0;
     }
 
     .card-info { flex: 1; min-width: 0; }
 
     .card-time {
-      font-size: 11px;
-      font-weight: 700;
-      color: var(--accent);
-      margin-bottom: 4px;
-      text-transform: capitalize;
-      letter-spacing: 0.01em;
+      font-size: 11px; font-weight: 700;
+      margin-bottom: 4px; text-transform: capitalize; letter-spacing: 0.01em;
     }
     .card-time.soon  { color: #e8523a; }
     .card-time.today { color: #d4870a; }
     .card-time.ok    { color: #2a9d4e; }
 
-    .card-text {
-      font-size: 14px;
-      line-height: 1.4;
-      word-break: break-word;
-      color: var(--text);
-    }
+    .card-text { font-size: 14px; line-height: 1.4; word-break: break-word; color: var(--text); }
 
-    .card-actions {
-      display: flex;
-      flex-direction: column;
-      gap: 6px;
-      flex-shrink: 0;
-    }
+    .card-actions { display: flex; flex-direction: column; gap: 6px; flex-shrink: 0; }
 
     .btn-action {
-      border: none;
-      border-radius: 10px;
-      cursor: pointer;
-      font-size: 15px;
-      width: 34px;
-      height: 34px;
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      font-weight: 600;
-      transition: opacity 0.15s, transform 0.1s;
+      border: none; border-radius: 10px; cursor: pointer;
+      font-size: 15px; width: 34px; height: 34px;
+      display: flex; align-items: center; justify-content: center;
+      font-weight: 600; transition: opacity 0.15s, transform 0.1s;
     }
     .btn-action:active { opacity: 0.5; transform: scale(0.92); }
 
-    .btn-done { background: rgba(42,157,78,0.13); color: #2a9d4e; }
-    .btn-del  { background: rgba(232,82,58,0.12); color: #e8523a; }
+    .btn-done { background: rgba(42,157,78,0.13);  color: #2a9d4e; }
+    .btn-del  { background: rgba(232,82,58,0.12);  color: #e8523a; }
+    .btn-edit { background: rgba(100,100,255,0.10); color: #5b6cf0; }
+
+    /* ── EDIT FORM (inline, dentro de la card) ── */
+    .edit-form {
+      border-top: 1px solid var(--border);
+      padding: 12px 14px;
+      display: flex; flex-direction: column; gap: 8px;
+    }
+
+    .edit-form textarea {
+      width: 100%; padding: 9px 10px;
+      border: 1.5px solid var(--border);
+      border-radius: 10px;
+      background: var(--bg);
+      color: var(--text);
+      font-size: 14px; font-family: inherit;
+      resize: vertical; min-height: 60px;
+      outline: none; transition: border-color 0.15s;
+    }
+    .edit-form textarea:focus { border-color: #5b6cf0; }
+
+    .edit-form input[type="datetime-local"] {
+      width: 100%; padding: 9px 10px;
+      border: 1.5px solid var(--border);
+      border-radius: 10px;
+      background: var(--bg);
+      color: var(--text);
+      font-size: 13px; font-family: inherit;
+      outline: none; transition: border-color 0.15s;
+    }
+    .edit-form input[type="datetime-local"]:focus { border-color: #5b6cf0; }
+
+    .edit-actions { display: flex; gap: 8px; }
+
+    .btn-save, .btn-cancel {
+      flex: 1; padding: 9px; border: none; border-radius: 10px;
+      font-size: 14px; font-weight: 600; cursor: pointer;
+      transition: opacity 0.15s;
+    }
+    .btn-save   { background: #5b6cf0; color: #fff; }
+    .btn-cancel { background: rgba(0,0,0,0.07); color: var(--hint); }
+    .btn-save:active, .btn-cancel:active { opacity: 0.6; }
 
     /* ── SPINNER ── */
     .spinner {
@@ -219,12 +186,7 @@
     @keyframes spin { to { transform: rotate(360deg); } }
 
     /* ── CONTADOR ── */
-    #counter {
-      text-align: center;
-      font-size: 12px;
-      color: var(--hint);
-      margin-bottom: 2px;
-    }
+    #counter { text-align: center; font-size: 12px; color: var(--hint); margin-bottom: 2px; }
   </style>
 </head>
 <body>
@@ -276,10 +238,15 @@ async function deleteReminder(jobId) {
 
 async function markDone(jobId) {
   const url = `${SUPABASE_URL}/rest/v1/recordatorios?job_id=eq.${encodeURIComponent(jobId)}&chat_id=eq.${CHAT_ID}`;
+  const res = await fetch(url, { method: "PATCH", headers: HEADERS, body: JSON.stringify({ enviado: true }) });
+  if (!res.ok) throw new Error(`HTTP ${res.status}`);
+}
+
+async function updateReminder(jobId, texto, scheduledAt) {
+  const url = `${SUPABASE_URL}/rest/v1/recordatorios?job_id=eq.${encodeURIComponent(jobId)}&chat_id=eq.${CHAT_ID}`;
   const res = await fetch(url, {
-    method: "PATCH",
-    headers: HEADERS,
-    body: JSON.stringify({ enviado: true }),
+    method: "PATCH", headers: HEADERS,
+    body: JSON.stringify({ texto, scheduled_at: scheduledAt }),
   });
   if (!res.ok) throw new Error(`HTTP ${res.status}`);
 }
@@ -295,24 +262,47 @@ function formatDate(isoStr) {
   const hh   = date.getHours().toString().padStart(2,"0");
   const mm   = date.getMinutes().toString().padStart(2,"0");
   const hora = `${hh}:${mm}`;
+  const año  = date.getFullYear();
 
   const esMismodia = date.toDateString() === now.toDateString();
   const manana = new Date(now); manana.setDate(manana.getDate()+1);
   const esMañana = date.toDateString() === manana.toDateString();
 
   let label, cls;
-  if (diff < 0)           { label = `venció · ${hora}`;     cls = "soon"; }
-  else if (diff < 3600)   { label = `en ${Math.round(diff/60)} min · ${hora}`; cls = "soon"; }
-  else if (esMismodia)    { label = `hoy · ${hora}`;         cls = "today"; }
-  else if (esMañana)      { label = `mañana · ${hora}`;      cls = "ok"; }
-  else {
+  if (diff < 0) {
+    label = `venció · ${hora} · ${date.getDate()} ${MESES[date.getMonth()]} ${año}`;
+    cls = "soon";
+  } else if (diff < 3600) {
+    label = `en ${Math.round(diff/60)} min · ${hora} · ${date.getDate()} ${MESES[date.getMonth()]} ${año}`;
+    cls = "soon";
+  } else if (esMismodia) {
+    label = `hoy · ${hora} · ${date.getDate()} ${MESES[date.getMonth()]} ${año}`;
+    cls = "today";
+  } else if (esMañana) {
+    label = `mañana · ${hora} · ${date.getDate()} ${MESES[date.getMonth()]} ${año}`;
+    cls = "ok";
+  } else {
     const dia = DIAS[date.getDay()];
     const d   = date.getDate();
     const mes = MESES[date.getMonth()];
-    label = `${dia} ${d} ${mes} · ${hora}`;
+    label = `${dia} ${d} ${mes} ${año} · ${hora}`;
     cls   = "ok";
   }
   return { label, cls };
+}
+
+// Convierte ISO a valor de input datetime-local (YYYY-MM-DDTHH:MM) en hora local
+function isoToLocalInput(isoStr) {
+  const d = new Date(isoStr);
+  const pad = n => n.toString().padStart(2,"0");
+  return `${d.getFullYear()}-${pad(d.getMonth()+1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
+}
+
+// Convierte valor de input datetime-local a ISO con offset local
+function localInputToIso(val) {
+  // val = "2026-04-15T10:30"
+  const d = new Date(val); // interpreta en timezone local del browser
+  return d.toISOString();
 }
 
 // ── Render ──
@@ -331,27 +321,36 @@ function renderError(msg) {
   main.innerHTML = `
     <div class="state">
       <img class="state-logo" src="logo.png" alt="FosfovitaBot" />
-      <h2>Ups</h2>
-      <p>${msg}</p>
+      <h2>Ups</h2><p>${msg}</p>
     </div>`;
 }
 
 function cardHtml(r) {
   const { label, cls } = formatDate(r.scheduled_at);
-  const texto = r.texto
-    .replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;");
+  const texto  = r.texto.replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;");
+  const short  = r.job_id.substring(0,8);
+  const dtVal  = isoToLocalInput(r.scheduled_at);
   return `
-    <div class="card" id="card-${r.job_id.substring(0,8)}">
-      <div class="card-left">
+    <div class="card" id="card-${short}" data-jobid="${r.job_id}" data-scheduled="${r.scheduled_at}" data-texto="${r.texto.replace(/"/g,'&quot;')}">
+      <div class="card-main">
         <div class="card-bell">🔔</div>
+        <div class="card-info">
+          <div class="card-time ${cls}">${label}</div>
+          <div class="card-text">${texto}</div>
+        </div>
+        <div class="card-actions">
+          <button class="btn-action btn-done" data-id="${r.job_id}" title="Listo">✓</button>
+          <button class="btn-action btn-edit" data-id="${r.job_id}" title="Editar">✏️</button>
+          <button class="btn-action btn-del"  data-id="${r.job_id}" title="Eliminar">✕</button>
+        </div>
       </div>
-      <div class="card-info">
-        <div class="card-time ${cls}">${label}</div>
-        <div class="card-text">${texto}</div>
-      </div>
-      <div class="card-actions">
-        <button class="btn-action btn-done" data-id="${r.job_id}" title="Marcar como hecho">✓</button>
-        <button class="btn-action btn-del"  data-id="${r.job_id}" title="Eliminar">✕</button>
+      <div class="edit-form" id="edit-${short}" style="display:none">
+        <textarea id="etxt-${short}">${r.texto}</textarea>
+        <input type="datetime-local" id="edt-${short}" value="${dtVal}" />
+        <div class="edit-actions">
+          <button class="btn-cancel" data-short="${short}">Cancelar</button>
+          <button class="btn-save"   data-short="${short}" data-id="${r.job_id}">Guardar</button>
+        </div>
       </div>
     </div>`;
 }
@@ -364,7 +363,6 @@ function removeCard(shortId) {
   card.style.transform  = "scale(0.95)";
   setTimeout(() => {
     card.remove();
-    // limpiar section-labels vacías
     document.querySelectorAll(".section-label").forEach(lbl => {
       let next = lbl.nextElementSibling;
       while (next && next.classList.contains("section-label")) next = next.nextElementSibling;
@@ -378,15 +376,29 @@ function removeCard(shortId) {
 function updateCounter() {
   const n = document.querySelectorAll(".card").length;
   const c = document.getElementById("counter");
-  if (c) c.textContent = n ? `${n} recordatorio${n !== 1 ? "s" : ""} pendiente${n !== 1 ? "s" : ""}` : "";
+  if (c) c.textContent = n ? `${n} recordatorio${n!==1?"s":""} pendiente${n!==1?"s":""}` : "";
+}
+
+function refreshCard(shortId, newTexto, newScheduled) {
+  const card = document.getElementById(`card-${shortId}`);
+  if (!card) return;
+  const { label, cls } = formatDate(newScheduled);
+  card.querySelector(".card-time").className = `card-time ${cls}`;
+  card.querySelector(".card-time").textContent = label;
+  card.querySelector(".card-text").textContent = newTexto;
+  card.dataset.scheduled = newScheduled;
+  card.dataset.texto     = newTexto;
+  // cerrar form
+  document.getElementById(`edit-${shortId}`).style.display = "none";
 }
 
 function attachListeners() {
+  // ── DONE ──
   document.querySelectorAll(".btn-done").forEach(btn => {
     btn.addEventListener("click", async () => {
-      const jobId    = btn.getAttribute("data-id");
-      const shortId  = jobId.substring(0,8);
-      btn.disabled   = true; btn.textContent = "…";
+      const jobId   = btn.getAttribute("data-id");
+      const shortId = jobId.substring(0,8);
+      btn.disabled  = true; btn.textContent = "…";
       try {
         await markDone(jobId);
         tg.HapticFeedback?.impactOccurred("light");
@@ -398,6 +410,7 @@ function attachListeners() {
     });
   });
 
+  // ── DELETE ──
   document.querySelectorAll(".btn-del").forEach(btn => {
     btn.addEventListener("click", async () => {
       const jobId   = btn.getAttribute("data-id");
@@ -413,6 +426,50 @@ function attachListeners() {
       }
     });
   });
+
+  // ── EDIT toggle ──
+  document.querySelectorAll(".btn-edit").forEach(btn => {
+    btn.addEventListener("click", () => {
+      const shortId  = btn.getAttribute("data-id").substring(0,8);
+      const editForm = document.getElementById(`edit-${shortId}`);
+      const isOpen   = editForm.style.display !== "none";
+      // cerrar todos los otros forms
+      document.querySelectorAll(".edit-form").forEach(f => f.style.display = "none");
+      if (!isOpen) editForm.style.display = "block";
+    });
+  });
+
+  // ── CANCEL ──
+  document.querySelectorAll(".btn-cancel").forEach(btn => {
+    btn.addEventListener("click", () => {
+      const shortId = btn.getAttribute("data-short");
+      document.getElementById(`edit-${shortId}`).style.display = "none";
+    });
+  });
+
+  // ── SAVE ──
+  document.querySelectorAll(".btn-save").forEach(btn => {
+    btn.addEventListener("click", async () => {
+      const shortId = btn.getAttribute("data-short");
+      const jobId   = btn.getAttribute("data-id");
+      const texto   = document.getElementById(`etxt-${shortId}`).value.trim();
+      const dtVal   = document.getElementById(`edt-${shortId}`).value;
+
+      if (!texto || !dtVal) { tg.showAlert?.("Completá el texto y la fecha."); return; }
+
+      const scheduledIso = localInputToIso(dtVal);
+      btn.disabled = true; btn.textContent = "…";
+      try {
+        await updateReminder(jobId, texto, scheduledIso);
+        tg.HapticFeedback?.impactOccurred("light");
+        refreshCard(shortId, texto, scheduledIso);
+        btn.disabled = false; btn.textContent = "Guardar";
+      } catch(e) {
+        btn.disabled = false; btn.textContent = "Guardar";
+        tg.showAlert?.(`Error: ${e.message}`);
+      }
+    });
+  });
 }
 
 function renderList(reminders) {
@@ -424,7 +481,7 @@ function renderList(reminders) {
   const proximos = reminders.filter(r => new Date(r.scheduled_at) >  todayEnd);
   const total    = reminders.length;
 
-  let html = `<p id="counter">${total} recordatorio${total !== 1 ? "s" : ""} pendiente${total !== 1 ? "s" : ""}</p>`;
+  let html = `<p id="counter">${total} recordatorio${total!==1?"s":""} pendiente${total!==1?"s":""}</p>`;
   html += '<div id="list">';
   if (hoy.length)      { html += '<div class="section-label">Hoy</div>';      hoy.forEach(r => { html += cardHtml(r); }); }
   if (proximos.length) { html += '<div class="section-label">Próximos</div>'; proximos.forEach(r => { html += cardHtml(r); }); }
