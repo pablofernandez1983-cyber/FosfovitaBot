@@ -3,18 +3,17 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Recordatorios</title>
+  <title>FosfovitaBot</title>
   <script src="https://telegram.org/js/telegram-web-app.js"></script>
   <style>
     :root {
-      --bg:       var(--tg-theme-bg-color, #ffffff);
-      --bg2:      var(--tg-theme-secondary-bg-color, #f1f1f1);
-      --text:     var(--tg-theme-text-color, #000000);
-      --hint:     var(--tg-theme-hint-color, #999999);
-      --accent:   var(--tg-theme-button-color, #2481cc);
+      --bg:       var(--tg-theme-bg-color, #f5f5f5);
+      --bg2:      var(--tg-theme-secondary-bg-color, #ffffff);
+      --text:     var(--tg-theme-text-color, #1a1a1a);
+      --hint:     var(--tg-theme-hint-color, #888);
+      --accent:   var(--tg-theme-button-color, #e8523a);
       --btn-text: var(--tg-theme-button-text-color, #ffffff);
-      --link:     var(--tg-theme-link-color, #2481cc);
-      --border:   rgba(0,0,0,0.08);
+      --border:   rgba(0,0,0,0.07);
     }
 
     * { box-sizing: border-box; margin: 0; padding: 0; }
@@ -27,140 +26,215 @@
       min-height: 100vh;
     }
 
+    /* ── HEADER ── */
     header {
-      background: var(--bg2);
-      padding: 14px 16px 12px;
-      border-bottom: 1px solid var(--border);
+      background: linear-gradient(135deg, #e8523a 0%, #f5a623 100%);
+      padding: 18px 16px 16px;
       display: flex;
       align-items: center;
-      justify-content: space-between;
+      gap: 12px;
       position: sticky;
       top: 0;
       z-index: 10;
+      box-shadow: 0 2px 12px rgba(232,82,58,0.25);
     }
 
-    header h1 {
-      font-size: 17px;
-      font-weight: 600;
+    .header-logo {
+      width: 48px;
+      height: 48px;
+      border-radius: 12px;
+      object-fit: cover;
+      box-shadow: 0 2px 8px rgba(0,0,0,0.2);
+      flex-shrink: 0;
+    }
+
+    .header-info { flex: 1; }
+
+    .header-info h1 {
+      font-size: 18px;
+      font-weight: 700;
+      color: #fff;
+      line-height: 1.1;
+    }
+
+    .header-info p {
+      font-size: 11px;
+      color: rgba(255,255,255,0.8);
+      margin-top: 2px;
     }
 
     #refresh-btn {
-      background: none;
+      background: rgba(255,255,255,0.2);
       border: none;
+      border-radius: 10px;
       cursor: pointer;
-      color: var(--accent);
-      font-size: 20px;
-      padding: 4px;
-      line-height: 1;
+      color: #fff;
+      font-size: 18px;
+      width: 36px;
+      height: 36px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      flex-shrink: 0;
+      transition: background 0.15s;
     }
+    #refresh-btn:active { background: rgba(255,255,255,0.35); }
 
-    #main {
-      padding: 12px 0;
-    }
+    /* ── CONTENIDO ── */
+    #main { padding: 14px 12px 24px; }
 
-    /* ── Estados ── */
+    /* ── ESTADOS ── */
     .state {
       display: flex;
       flex-direction: column;
       align-items: center;
       justify-content: center;
       padding: 60px 24px;
-      gap: 12px;
-      color: var(--hint);
+      gap: 14px;
       text-align: center;
     }
-    .state .icon { font-size: 40px; }
-    .state p { font-size: 14px; line-height: 1.4; }
 
-    /* ── Lista ── */
-    #list { padding: 0 12px; display: flex; flex-direction: column; gap: 8px; }
+    .state-logo {
+      width: 80px;
+      height: 80px;
+      border-radius: 20px;
+      object-fit: cover;
+      box-shadow: 0 4px 16px rgba(232,82,58,0.2);
+    }
+
+    .state h2 {
+      font-size: 16px;
+      font-weight: 600;
+      color: var(--text);
+    }
+
+    .state p {
+      font-size: 13px;
+      color: var(--hint);
+      line-height: 1.5;
+    }
+
+    /* ── SECTION LABEL ── */
+    .section-label {
+      font-size: 11px;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 0.07em;
+      color: var(--hint);
+      padding: 14px 4px 6px;
+    }
+
+    /* ── CARDS ── */
+    #list { display: flex; flex-direction: column; gap: 8px; }
 
     .card {
       background: var(--bg2);
-      border-radius: 12px;
-      padding: 12px 14px;
+      border-radius: 14px;
+      padding: 13px 14px;
       display: flex;
       align-items: flex-start;
-      gap: 12px;
+      gap: 11px;
+      box-shadow: 0 1px 4px rgba(0,0,0,0.06);
       animation: slideIn 0.18s ease;
     }
+
     @keyframes slideIn {
-      from { opacity: 0; transform: translateY(6px); }
+      from { opacity: 0; transform: translateY(8px); }
       to   { opacity: 1; transform: translateY(0); }
     }
 
-    .card .bell {
-      font-size: 22px;
+    .card-left {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 4px;
       flex-shrink: 0;
-      margin-top: 1px;
     }
 
-    .card .info { flex: 1; min-width: 0; }
+    .card-bell {
+      width: 38px;
+      height: 38px;
+      border-radius: 10px;
+      background: linear-gradient(135deg, #e8523a, #f5a623);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 18px;
+    }
 
-    .card .time {
-      font-size: 12px;
-      font-weight: 600;
+    .card-info { flex: 1; min-width: 0; }
+
+    .card-time {
+      font-size: 11px;
+      font-weight: 700;
       color: var(--accent);
-      margin-bottom: 3px;
+      margin-bottom: 4px;
       text-transform: capitalize;
+      letter-spacing: 0.01em;
     }
-    .card .time.soon { color: #e8523a; }
-    .card .time.today { color: #e09a1a; }
+    .card-time.soon  { color: #e8523a; }
+    .card-time.today { color: #d4870a; }
+    .card-time.ok    { color: #2a9d4e; }
 
-    .card .texto {
+    .card-text {
       font-size: 14px;
-      line-height: 1.35;
+      line-height: 1.4;
       word-break: break-word;
+      color: var(--text);
     }
 
-    .card .actions {
+    .card-actions {
       display: flex;
       flex-direction: column;
       gap: 6px;
       flex-shrink: 0;
     }
 
-    .btn-del, .btn-done {
+    .btn-action {
       border: none;
-      border-radius: 8px;
+      border-radius: 10px;
       cursor: pointer;
-      font-size: 16px;
-      width: 32px;
-      height: 32px;
+      font-size: 15px;
+      width: 34px;
+      height: 34px;
       display: flex;
       align-items: center;
       justify-content: center;
-      transition: opacity 0.15s;
-    }
-    .btn-del  { background: rgba(232,82,58,0.12); }
-    .btn-done { background: rgba(46,186,86,0.12); }
-    .btn-del:active, .btn-done:active { opacity: 0.5; }
-
-    /* ── Sección "hoy" / "próximos" ── */
-    .section-label {
-      font-size: 11px;
       font-weight: 600;
-      text-transform: uppercase;
-      letter-spacing: 0.06em;
-      color: var(--hint);
-      padding: 10px 12px 4px;
+      transition: opacity 0.15s, transform 0.1s;
     }
+    .btn-action:active { opacity: 0.5; transform: scale(0.92); }
 
-    /* ── Spinner ── */
+    .btn-done { background: rgba(42,157,78,0.13); color: #2a9d4e; }
+    .btn-del  { background: rgba(232,82,58,0.12); color: #e8523a; }
+
+    /* ── SPINNER ── */
     .spinner {
-      width: 28px; height: 28px;
-      border: 3px solid var(--border);
-      border-top-color: var(--accent);
+      width: 30px; height: 30px;
+      border: 3px solid rgba(232,82,58,0.2);
+      border-top-color: #e8523a;
       border-radius: 50%;
       animation: spin 0.7s linear infinite;
     }
     @keyframes spin { to { transform: rotate(360deg); } }
+
+    /* ── CONTADOR ── */
+    #counter {
+      text-align: center;
+      font-size: 12px;
+      color: var(--hint);
+      margin-bottom: 2px;
+    }
   </style>
 </head>
 <body>
 
 <header>
-  <h1>🔔 Mis Recordatorios</h1>
+  <img class="header-logo" src="logo.png" alt="FosfovitaBot" />
+  <div class="header-info">
+    <h1>FosfovitaBot</h1>
+    <p>Tus recordatorios pendientes</p>
+  </div>
   <button id="refresh-btn" title="Actualizar">↻</button>
 </header>
 
@@ -169,26 +243,18 @@
 </div>
 
 <script>
-// ────────────────────────────────────────────
-// CONFIG — reemplazá los valores de abajo
-// ────────────────────────────────────────────
+// ── CONFIG ──
 const SUPABASE_URL      = "https://zqwkznlgbkofsrygqezk.supabase.co";
 const SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Inpxd2t6bmxnYmtvZnNyeWdxZXprIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzU1MTAzMTAsImV4cCI6MjA5MTA4NjMxMH0.GNt-G_RUcxLYCpSqAKKI4KxNU87bBEQAJVCr88R2wQE";
 
-// ────────────────────────────────────────────
-// Telegram WebApp init
-// ────────────────────────────────────────────
+// ── Telegram WebApp ──
 const tg = window.Telegram.WebApp;
 tg.ready();
 tg.expand();
-
-// Obtener chat_id del usuario autenticado por Telegram
 const tgUser = tg.initDataUnsafe?.user;
 const CHAT_ID = tgUser?.id ?? null;
 
-// ────────────────────────────────────────────
-// Supabase REST helpers
-// ────────────────────────────────────────────
+// ── Supabase REST ──
 const HEADERS = {
   "apikey":        SUPABASE_ANON_KEY,
   "Authorization": `Bearer ${SUPABASE_ANON_KEY}`,
@@ -196,7 +262,6 @@ const HEADERS = {
 };
 
 async function fetchReminders() {
-  if (!CHAT_ID) return [];
   const url = `${SUPABASE_URL}/rest/v1/recordatorios?chat_id=eq.${CHAT_ID}&enviado=eq.false&order=scheduled_at.asc&select=*`;
   const res = await fetch(url, { headers: HEADERS });
   if (!res.ok) throw new Error(`HTTP ${res.status}`);
@@ -219,194 +284,169 @@ async function markDone(jobId) {
   if (!res.ok) throw new Error(`HTTP ${res.status}`);
 }
 
-// ────────────────────────────────────────────
-// Formatear fecha
-// ────────────────────────────────────────────
+// ── Fecha ──
 const DIAS  = ["domingo","lunes","martes","miércoles","jueves","viernes","sábado"];
 const MESES = ["ene","feb","mar","abr","may","jun","jul","ago","sep","oct","nov","dic"];
 
 function formatDate(isoStr) {
   const now  = new Date();
   const date = new Date(isoStr);
-  const diff = (date - now) / 1000; // segundos
-
-  const hh = date.getHours().toString().padStart(2,"0");
-  const mm = date.getMinutes().toString().padStart(2,"0");
+  const diff = (date - now) / 1000;
+  const hh   = date.getHours().toString().padStart(2,"0");
+  const mm   = date.getMinutes().toString().padStart(2,"0");
   const hora = `${hh}:${mm}`;
 
   const esMismodia = date.toDateString() === now.toDateString();
   const manana = new Date(now); manana.setDate(manana.getDate()+1);
   const esMañana = date.toDateString() === manana.toDateString();
 
-  let label;
-  if (diff < 0)           label = `hace un momento · ${hora}`;
-  else if (diff < 3600)   label = `en ${Math.round(diff/60)} min · ${hora}`;
-  else if (esMismodia)    label = `hoy · ${hora}`;
-  else if (esMañana)      label = `mañana · ${hora}`;
+  let label, cls;
+  if (diff < 0)           { label = `venció · ${hora}`;     cls = "soon"; }
+  else if (diff < 3600)   { label = `en ${Math.round(diff/60)} min · ${hora}`; cls = "soon"; }
+  else if (esMismodia)    { label = `hoy · ${hora}`;         cls = "today"; }
+  else if (esMañana)      { label = `mañana · ${hora}`;      cls = "ok"; }
   else {
     const dia = DIAS[date.getDay()];
     const d   = date.getDate();
     const mes = MESES[date.getMonth()];
     label = `${dia} ${d} ${mes} · ${hora}`;
+    cls   = "ok";
   }
-
-  let cls = "";
-  if (diff < 0)           cls = "soon";   // ya pasó (no enviado = raro)
-  else if (diff < 3600)   cls = "soon";   // < 1h
-  else if (esMismodia)    cls = "today";  // hoy pero más tarde
-
   return { label, cls };
 }
 
-// ────────────────────────────────────────────
-// Render
-// ────────────────────────────────────────────
+// ── Render ──
 const main = document.getElementById("main");
 
-function setHtml(html) { main.innerHTML = html; }
-
 function renderEmpty() {
-  setHtml(`
+  main.innerHTML = `
     <div class="state">
-      <div class="icon">🎉</div>
+      <img class="state-logo" src="logo.png" alt="FosfovitaBot" />
+      <h2>¡Todo al día! 🎉</h2>
       <p>No tenés recordatorios pendientes.<br>Escribile al bot para crear uno.</p>
-    </div>`);
+    </div>`;
 }
 
 function renderError(msg) {
-  setHtml(`
+  main.innerHTML = `
     <div class="state">
-      <div class="icon">⚠️</div>
+      <img class="state-logo" src="logo.png" alt="FosfovitaBot" />
+      <h2>Ups</h2>
       <p>${msg}</p>
-    </div>`);
+    </div>`;
+}
+
+function cardHtml(r) {
+  const { label, cls } = formatDate(r.scheduled_at);
+  const texto = r.texto
+    .replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;");
+  return `
+    <div class="card" id="card-${r.job_id.substring(0,8)}">
+      <div class="card-left">
+        <div class="card-bell">🔔</div>
+      </div>
+      <div class="card-info">
+        <div class="card-time ${cls}">${label}</div>
+        <div class="card-text">${texto}</div>
+      </div>
+      <div class="card-actions">
+        <button class="btn-action btn-done" data-id="${r.job_id}" title="Marcar como hecho">✓</button>
+        <button class="btn-action btn-del"  data-id="${r.job_id}" title="Eliminar">✕</button>
+      </div>
+    </div>`;
+}
+
+function removeCard(shortId) {
+  const card = document.getElementById(`card-${shortId}`);
+  if (!card) return;
+  card.style.transition = "opacity 0.2s, transform 0.2s";
+  card.style.opacity    = "0";
+  card.style.transform  = "scale(0.95)";
+  setTimeout(() => {
+    card.remove();
+    // limpiar section-labels vacías
+    document.querySelectorAll(".section-label").forEach(lbl => {
+      let next = lbl.nextElementSibling;
+      while (next && next.classList.contains("section-label")) next = next.nextElementSibling;
+      if (!next || !next.classList.contains("card")) lbl.remove();
+    });
+    if (!document.querySelectorAll(".card").length) renderEmpty();
+    updateCounter();
+  }, 200);
+}
+
+function updateCounter() {
+  const n = document.querySelectorAll(".card").length;
+  const c = document.getElementById("counter");
+  if (c) c.textContent = n ? `${n} recordatorio${n !== 1 ? "s" : ""} pendiente${n !== 1 ? "s" : ""}` : "";
+}
+
+function attachListeners() {
+  document.querySelectorAll(".btn-done").forEach(btn => {
+    btn.addEventListener("click", async () => {
+      const jobId    = btn.getAttribute("data-id");
+      const shortId  = jobId.substring(0,8);
+      btn.disabled   = true; btn.textContent = "…";
+      try {
+        await markDone(jobId);
+        tg.HapticFeedback?.impactOccurred("light");
+        removeCard(shortId);
+      } catch(e) {
+        btn.disabled = false; btn.textContent = "✓";
+        tg.showAlert?.(`Error: ${e.message}`);
+      }
+    });
+  });
+
+  document.querySelectorAll(".btn-del").forEach(btn => {
+    btn.addEventListener("click", async () => {
+      const jobId   = btn.getAttribute("data-id");
+      const shortId = jobId.substring(0,8);
+      btn.disabled  = true; btn.textContent = "…";
+      try {
+        await deleteReminder(jobId);
+        tg.HapticFeedback?.impactOccurred("medium");
+        removeCard(shortId);
+      } catch(e) {
+        btn.disabled = false; btn.textContent = "✕";
+        tg.showAlert?.(`Error: ${e.message}`);
+      }
+    });
+  });
 }
 
 function renderList(reminders) {
   if (!reminders.length) { renderEmpty(); return; }
 
-  const now = new Date();
+  const now      = new Date();
   const todayEnd = new Date(now); todayEnd.setHours(23,59,59,999);
-
   const hoy      = reminders.filter(r => new Date(r.scheduled_at) <= todayEnd);
   const proximos = reminders.filter(r => new Date(r.scheduled_at) >  todayEnd);
+  const total    = reminders.length;
 
-  let html = '<div id="list">';
-
-  function cardHtml(r) {
-    const { label, cls } = formatDate(r.scheduled_at);
-    const timeClass = cls ? ` ${cls}` : "";
-    // Escapar texto
-    const texto = r.texto.replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;");
-    return `
-      <div class="card" id="card-${r.job_id.substring(0,8)}">
-        <div class="bell">🔔</div>
-        <div class="info">
-          <div class="time${timeClass}">${label}</div>
-          <div class="texto">${texto}</div>
-        </div>
-        <div class="actions">
-          <button class="btn-done" title="Marcar hecho"    data-id="${r.job_id}">✓</button>
-          <button class="btn-del"  title="Eliminar"        data-id="${r.job_id}">✕</button>
-        </div>
-      </div>`;
-  }
-
-  if (hoy.length) {
-    html += '<div class="section-label">Hoy</div>';
-    hoy.forEach(r => { html += cardHtml(r); });
-  }
-  if (proximos.length) {
-    html += '<div class="section-label">Próximos</div>';
-    proximos.forEach(r => { html += cardHtml(r); });
-  }
-
+  let html = `<p id="counter">${total} recordatorio${total !== 1 ? "s" : ""} pendiente${total !== 1 ? "s" : ""}</p>`;
+  html += '<div id="list">';
+  if (hoy.length)      { html += '<div class="section-label">Hoy</div>';      hoy.forEach(r => { html += cardHtml(r); }); }
+  if (proximos.length) { html += '<div class="section-label">Próximos</div>'; proximos.forEach(r => { html += cardHtml(r); }); }
   html += "</div>";
-  setHtml(html);
 
-  // Event listeners para botones
-  document.querySelectorAll(".btn-del").forEach(btn => {
-    btn.addEventListener("click", async () => {
-      const jobId = btn.getAttribute("data-id");
-      const shortId = jobId.substring(0,8);
-      btn.disabled = true;
-      btn.textContent = "…";
-      try {
-        await deleteReminder(jobId);
-        tg.HapticFeedback?.impactOccurred("medium");
-        const card = document.getElementById(`card-${shortId}`);
-        if (card) {
-          card.style.transition = "opacity 0.2s, transform 0.2s";
-          card.style.opacity    = "0";
-          card.style.transform  = "translateX(20px)";
-          setTimeout(() => { card.remove(); checkEmpty(); }, 200);
-        }
-      } catch(e) {
-        btn.disabled    = false;
-        btn.textContent = "✕";
-        tg.showAlert?.(`No se pudo eliminar: ${e.message}`);
-      }
-    });
-  });
-
-  document.querySelectorAll(".btn-done").forEach(btn => {
-    btn.addEventListener("click", async () => {
-      const jobId = btn.getAttribute("data-id");
-      const shortId = jobId.substring(0,8);
-      btn.disabled = true;
-      btn.textContent = "…";
-      try {
-        await markDone(jobId);
-        tg.HapticFeedback?.impactOccurred("light");
-        const card = document.getElementById(`card-${shortId}`);
-        if (card) {
-          card.style.transition = "opacity 0.2s";
-          card.style.opacity    = "0";
-          setTimeout(() => { card.remove(); checkEmpty(); }, 200);
-        }
-      } catch(e) {
-        btn.disabled    = false;
-        btn.textContent = "✓";
-        tg.showAlert?.(`No se pudo marcar: ${e.message}`);
-      }
-    });
-  });
+  main.innerHTML = html;
+  attachListeners();
 }
 
-function checkEmpty() {
-  const cards = document.querySelectorAll(".card");
-  const labels = document.querySelectorAll(".section-label");
-  // Limpiar labels de secciones vacías
-  labels.forEach(lbl => {
-    let next = lbl.nextElementSibling;
-    while (next && next.classList.contains("section-label")) next = next.nextElementSibling;
-    if (!next || !next.classList.contains("card")) lbl.remove();
-  });
-  if (!document.querySelectorAll(".card").length) renderEmpty();
-}
-
-// ────────────────────────────────────────────
-// Load data
-// ────────────────────────────────────────────
+// ── Load ──
 async function load() {
-  setHtml('<div class="state"><div class="spinner"></div></div>');
+  main.innerHTML = '<div class="state"><div class="spinner"></div></div>';
   try {
-    if (!CHAT_ID) {
-      renderError("No se pudo identificar tu usuario de Telegram.<br>Abrí esta página desde el bot.");
-      return;
-    }
-    if (SUPABASE_URL.includes("TU_") || SUPABASE_ANON_KEY.includes("TU_")) {
-      renderError("Falta configurar las credenciales de Supabase en el archivo index.html.");
-      return;
-    }
+    if (!CHAT_ID) { renderError("No se pudo identificar tu usuario.<br>Abrí esta página desde el bot."); return; }
     const data = await fetchReminders();
     renderList(data);
   } catch(e) {
-    renderError(`Error cargando recordatorios:<br>${e.message}`);
+    renderError(`No se pudo cargar.<br>${e.message}`);
   }
 }
 
 document.getElementById("refresh-btn").addEventListener("click", load);
-
 load();
 </script>
 </body>
