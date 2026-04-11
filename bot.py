@@ -1,12 +1,12 @@
 import os
 import logging
 import asyncio
+import uuid
 from datetime import datetime
 import pytz
 from telegram import Update, Bot
 from telegram.ext import Application, MessageHandler, CommandHandler, filters, ContextTypes
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
-from apscheduler.jobstores.sqlalchemy import SQLAlchemyJobStore
 import google.generativeai as genai
 from supabase import create_client
 import json
@@ -19,17 +19,17 @@ logger = logging.getLogger(__name__)
 # Config
 TELEGRAM_TOKEN = os.environ["TELEGRAM_TOKEN"]
 GEMINI_API_KEY = os.environ["GEMINI_API_KEY"]
-SUPABASE_URL = os.environ["SUPABASE_URL"]
-SUPABASE_KEY = os.environ["SUPABASE_KEY"]
-ALLOWED_USER_ID = int(os.environ.get("ALLOWED_USER_ID", "0"))  # Tu chat_id de Telegram
+SUPABASE_URL   = os.environ["SUPABASE_URL"]
+SUPABASE_KEY   = os.environ["SUPABASE_KEY"]
+ALLOWED_USER_ID = int(os.environ.get("ALLOWED_USER_ID", "0"))
 TZ = pytz.timezone("America/Argentina/Buenos_Aires")
 
 # Clients
 genai.configure(api_key=GEMINI_API_KEY)
-gemini = genai.GenerativeModel("gemini-2.0-flash")
+gemini  = genai.GenerativeModel("gemini-2.0-flash")
 supabase = create_client(SUPABASE_URL, SUPABASE_KEY)
 
-# Scheduler con jobstore en memoria (los jobs se guardan en Supabase manualmente)
+# Scheduler en memoria (jobs se persisten en Supabase)
 scheduler = AsyncIOScheduler(timezone=TZ)
 
 # ─────────────────────────────────────────────
@@ -38,11 +38,11 @@ scheduler = AsyncIOScheduler(timezone=TZ)
 
 def save_reminder(chat_id: int, reminder_text: str, scheduled_at: datetime, job_id: str):
     supabase.table("recordatorios").insert({
-        "chat_id": chat_id,
-        "texto": reminder_text,
+        "chat_id":      chat_id,
+        "texto":        reminder_text,
         "scheduled_at": scheduled_at.isoformat(),
-        "job_id": job_id,
-        "enviado": False,
+        "job_id":       job_id,
+        "enviado":      False,
     }).execute()
 
 def mark_sent(job_id: str):
@@ -64,7 +64,7 @@ def delete_reminder(job_id: str, chat_id: int):
         .execute()
 
 def load_pending_from_supabase():
-    """Al iniciar, recarga todos los recordatorios pendientes en el scheduler."""
+    """Al iniciar, recarga todos los recordatorios pendientes."""
     result = supabase.table("recordatorios")\
         .select("*")\
         .eq("enviado", False)\
@@ -102,20 +102,15 @@ Reglas:
     text = response.text.strip()
     text = re.sub(r"```json|```", "", text).strip()
     try:
-        data = json.loads(text)
-        return data
+        return json.loads(text)
     except Exception:
         logger.error(f"Error parseando JSON de Gemini: {text}")
         return None
 
 def analyze_image_with_gemini(image_bytes: bytes, mime_type: str, caption: str = "") -> str:
     """Analiza una imagen y devuelve descripción o respuesta."""
-    import google.generativeai as genai
-    from google.generativeai.types import content_types
-
     prompt = caption if caption else "Describí esta imagen en detalle en español."
 
-    # Si el caption tiene palabras clave de recordatorio, intentar extraer info
     if any(w in caption.lower() for w in ["recordame", "recordá", "recorda", "reminder"]):
         prompt = f"""El usuario mandó esta imagen con el mensaje: "{caption}"
 Describí qué hay en la imagen y si hay fechas, eventos, o información relevante para un recordatorio."""
@@ -153,25 +148,22 @@ async def handle_text(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if not is_allowed(update):
         return
 
-    text = update.message.text
+    text    = update.message.text
     chat_id = update.effective_chat.id
-    now = datetime.now(TZ)
+    now     = datetime.now(TZ)
 
     parsed = parse_reminder_with_gemini(text, now)
 
     if parsed and parsed.get("es_recordatorio"):
         try:
-            dt_str = parsed["datetime"]
+            scheduled_at  = datetime.fromisoformat(parsed["datetime"]).astimezone(TZ)
             reminder_text = parsed["texto"]
-            scheduled_at = datetime.fromisoformat(dt_str).astimezone(TZ)
 
             if scheduled_at <= now:
                 await update.message.reply_text("⚠️ Esa fecha/hora ya pasó. ¿Querés que lo programe para otro momento?")
                 return
 
-            import uuid
             job_id = str(uuid.uuid4())
-
             scheduler.add_job(
                 send_reminder,
                 trigger="date",
@@ -190,7 +182,6 @@ async def handle_text(update: Update, context: ContextTypes.DEFAULT_TYPE):
             logger.error(f"Error agendando recordatorio: {e}")
             await update.message.reply_text("❌ No pude agendar el recordatorio. Intentá de nuevo.")
     else:
-        # Mensaje general — responder con Gemini
         response = gemini.generate_content(
             f"Sos un asistente personal amigable. Respondé en español rioplatense, breve y directo.\n\nUsuario: {text}"
         )
@@ -202,29 +193,24 @@ async def handle_photo(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     chat_id = update.effective_chat.id
     caption = update.message.caption or ""
-    now = datetime.now(TZ)
+    now     = datetime.now(TZ)
 
-    # Descargar foto (la de mayor resolución)
-    photo = update.message.photo[-1]
-    file = await context.bot.get_file(photo.file_id)
+    photo      = update.message.photo[-1]
+    file       = await context.bot.get_file(photo.file_id)
     image_bytes = await file.download_as_bytearray()
 
     analysis = analyze_image_with_gemini(bytes(image_bytes), "image/jpeg", caption)
 
-    # Si el caption tiene "recordame", intentar agendar
     if any(w in caption.lower() for w in ["recordame", "recordá", "recorda"]):
         combined_text = f"{caption} — Imagen: {analysis}"
         parsed = parse_reminder_with_gemini(combined_text, now)
 
         if parsed and parsed.get("es_recordatorio"):
             try:
-                dt_str = parsed["datetime"]
+                scheduled_at  = datetime.fromisoformat(parsed["datetime"]).astimezone(TZ)
                 reminder_text = parsed.get("texto", analysis[:200])
-                scheduled_at = datetime.fromisoformat(dt_str).astimezone(TZ)
 
-                import uuid
                 job_id = str(uuid.uuid4())
-
                 scheduler.add_job(
                     send_reminder,
                     trigger="date",
@@ -251,10 +237,10 @@ async def handle_document(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     doc = update.message.document
     if doc.mime_type and doc.mime_type.startswith("image/"):
-        file = await context.bot.get_file(doc.file_id)
+        file        = await context.bot.get_file(doc.file_id)
         image_bytes = await file.download_as_bytearray()
-        caption = update.message.caption or ""
-        analysis = analyze_image_with_gemini(bytes(image_bytes), doc.mime_type, caption)
+        caption     = update.message.caption or ""
+        analysis    = analyze_image_with_gemini(bytes(image_bytes), doc.mime_type, caption)
         await update.message.reply_text(f"🖼️ {analysis}")
     else:
         await update.message.reply_text("Por ahora solo proceso imágenes. ¡Mandame una foto!")
@@ -279,7 +265,7 @@ async def cmd_start(update: Update, context: ContextTypes.DEFAULT_TYPE):
 async def cmd_lista(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if not is_allowed(update):
         return
-    chat_id = update.effective_chat.id
+    chat_id   = update.effective_chat.id
     reminders = get_pending_reminders(chat_id)
 
     if not reminders:
@@ -288,7 +274,7 @@ async def cmd_lista(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     lines = ["📋 *Tus recordatorios pendientes:*\n"]
     for i, r in enumerate(reminders, 1):
-        dt = datetime.fromisoformat(r["scheduled_at"]).astimezone(TZ)
+        dt        = datetime.fromisoformat(r["scheduled_at"]).astimezone(TZ)
         fecha_str = dt.strftime("%a %d/%m %H:%M")
         lines.append(f"{i}. {fecha_str} — {r['texto']}\n   ID: `{r['job_id'][:8]}...`")
 
@@ -303,8 +289,8 @@ async def cmd_borrar(update: Update, context: ContextTypes.DEFAULT_TYPE):
         return
 
     partial_id = context.args[0]
-    chat_id = update.effective_chat.id
-    reminders = get_pending_reminders(chat_id)
+    chat_id    = update.effective_chat.id
+    reminders  = get_pending_reminders(chat_id)
 
     match = next((r for r in reminders if r["job_id"].startswith(partial_id)), None)
     if not match:
@@ -323,23 +309,28 @@ async def cmd_borrar(update: Update, context: ContextTypes.DEFAULT_TYPE):
 # STARTUP: recargar recordatorios pendientes
 # ─────────────────────────────────────────────
 
-async def restore_pending_jobs(app):
-    pending = load_pending_from_supabase()
-    now = datetime.now(TZ)
+async def post_init(app: Application) -> None:
+    """
+    PTB v21: este callback corre dentro del event loop del bot,
+    antes de que empiece el polling. Lugar correcto para iniciar
+    el scheduler y restaurar jobs async.
+    """
+    scheduler.start()
+
+    pending  = load_pending_from_supabase()
+    now      = datetime.now(TZ)
     restored = 0
-    expired = 0
+    expired  = 0
 
     for r in pending:
         scheduled_at = datetime.fromisoformat(r["scheduled_at"]).astimezone(TZ)
-        job_id = r["job_id"]
+        job_id  = r["job_id"]
         chat_id = r["chat_id"]
-        text = r["texto"]
+        text    = r["texto"]
 
         if scheduled_at <= now:
-            # Ya pasó — enviarlo ahora
             try:
-                bot = Bot(token=TELEGRAM_TOKEN)
-                await bot.send_message(
+                await app.bot.send_message(
                     chat_id=chat_id,
                     text=f"🔔 *Recordatorio* _(llegó con retraso)_\n\n{text}",
                     parse_mode="Markdown"
@@ -359,13 +350,19 @@ async def restore_pending_jobs(app):
             restored += 1
 
     logger.info(f"Recordatorios restaurados: {restored} futuros, {expired} enviados tardíos")
+    logger.info("Bot iniciado ✅")
 
 # ─────────────────────────────────────────────
-# MAIN
+# MAIN — sin asyncio.run(), PTB maneja el loop
 # ─────────────────────────────────────────────
 
-async def main():
-    app = Application.builder().token(TELEGRAM_TOKEN).build()
+def main():
+    app = (
+        Application.builder()
+        .token(TELEGRAM_TOKEN)
+        .post_init(post_init)
+        .build()
+    )
 
     app.add_handler(CommandHandler("start", cmd_start))
     app.add_handler(CommandHandler("lista", cmd_lista))
@@ -374,11 +371,8 @@ async def main():
     app.add_handler(MessageHandler(filters.PHOTO, handle_photo))
     app.add_handler(MessageHandler(filters.Document.ALL, handle_document))
 
-    scheduler.start()
-    await restore_pending_jobs(app)
-
-    logger.info("Bot iniciado ✅")
-    await app.run_polling(drop_pending_updates=True)
+    # run_polling() es síncrono en PTB v21 — maneja su propio event loop
+    app.run_polling(drop_pending_updates=True)
 
 if __name__ == "__main__":
-    asyncio.run(main())
+    main()
