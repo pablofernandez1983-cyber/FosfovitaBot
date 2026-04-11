@@ -102,7 +102,7 @@ def get_nombre_usuario(chat_id: int) -> str:
 
 async def _gemini_post(payload: dict, timeout: int = 45) -> str:
     """Llama a Gemini via REST con retry automático en caso de 429."""
-    waits = [5, 15, 30]  # segundos de espera entre reintentos
+    waits = [20, 40, 65]  # segundos de espera entre reintentos (RPM se resetea cada 60s)
     last_err = None
     for attempt, wait in enumerate([0] + waits):
         if wait:
