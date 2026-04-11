@@ -100,13 +100,33 @@ def get_nombre_usuario(chat_id: int) -> str:
 # GEMINI helpers
 # ─────────────────────────────────────────────
 
+async def _gemini_post(payload: dict, timeout: int = 45) -> str:
+    """Llama a Gemini via REST con retry automático en caso de 429."""
+    waits = [5, 15, 30]  # segundos de espera entre reintentos
+    last_err = None
+    for attempt, wait in enumerate([0] + waits):
+        if wait:
+            logger.warning(f"Gemini 429 — esperando {wait}s antes del intento {attempt+1}")
+            await asyncio.sleep(wait)
+        try:
+            async with httpx.AsyncClient(timeout=timeout) as client:
+                r = await client.post(f"{GEMINI_URL}?key={GEMINI_API_KEY}", json=payload)
+                if r.status_code == 429:
+                    last_err = Exception(f"429 Too Many Requests")
+                    continue
+                r.raise_for_status()
+                return r.json()["candidates"][0]["content"]["parts"][0]["text"].strip()
+        except httpx.HTTPStatusError as e:
+            if e.response.status_code == 429:
+                last_err = e
+                continue
+            raise
+    raise last_err
+
 async def _gemini_text(prompt: str) -> str:
     """Llama a Gemini via REST y devuelve el texto de la respuesta."""
     payload = {"contents": [{"parts": [{"text": prompt}]}]}
-    async with httpx.AsyncClient(timeout=30) as client:
-        r = await client.post(f"{GEMINI_URL}?key={GEMINI_API_KEY}", json=payload)
-        r.raise_for_status()
-        return r.json()["candidates"][0]["content"]["parts"][0]["text"].strip()
+    return await _gemini_post(payload, timeout=30)
 
 async def _gemini_media(media_bytes: bytes, mime_type: str, prompt: str) -> str:
     """Llama a Gemini con audio o imagen + texto via REST."""
@@ -116,10 +136,7 @@ async def _gemini_media(media_bytes: bytes, mime_type: str, prompt: str) -> str:
         {"inline_data": {"mime_type": mime_type, "data": b64}},
         {"text": prompt},
     ]}]}
-    async with httpx.AsyncClient(timeout=45) as client:
-        r = await client.post(f"{GEMINI_URL}?key={GEMINI_API_KEY}", json=payload)
-        r.raise_for_status()
-        return r.json()["candidates"][0]["content"]["parts"][0]["text"].strip()
+    return await _gemini_post(payload, timeout=45)
 
 async def parse_reminder_with_gemini(user_text: str, now: datetime) -> dict | None:
     """Extrae fecha/hora y texto del recordatorio usando Gemini."""
