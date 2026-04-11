@@ -145,7 +145,7 @@ async def _gemini_media(media_bytes: bytes, mime_type: str, prompt: str, notify_
 
 async def parse_reminder_with_gemini(user_text: str, now: datetime, notify_cb=None) -> dict | None:
     """Extrae fecha/hora y texto del recordatorio usando Gemini."""
-    prompt = f"""Hoy es {now.strftime('%A %d/%m/%Y %H:%M')} (hora Argentina, UTC-3).
+    prompt = f"""Hoy es {now.strftime('%A %d/%m/%Y %H:%M')} (hora Argentina, UTC-3). AÑO ACTUAL: {now.year}.
 
 El usuario escribió: "{user_text}"
 
@@ -157,21 +157,22 @@ Si es un pedido de recordatorio, extraé:
 Respondé SOLO con JSON válido, sin markdown, sin explicaciones.
 
 Para uno mismo:
-{{"es_recordatorio": true, "datetime": "2025-01-15T10:00:00-03:00", "texto": "llamar al médico"}}
+{{"es_recordatorio": true, "datetime": "{now.year}-01-15T10:00:00-03:00", "texto": "llamar al médico"}}
 
 Para otra persona (solo si se menciona explícitamente):
-{{"es_recordatorio": true, "datetime": "2025-01-15T10:00:00-03:00", "texto": "llamar al médico", "para": "Lore"}}
+{{"es_recordatorio": true, "datetime": "{now.year}-01-15T10:00:00-03:00", "texto": "llamar al médico", "para": "Lore"}}
 
 Si NO es un pedido de recordatorio:
 {{"es_recordatorio": false}}
 
-Reglas de fecha:
-- "mañana" = día siguiente
-- "la semana que viene" = lunes próximo
-- si dice solo hora sin día = hoy si la hora no pasó, mañana si ya pasó
+Reglas de fecha (MUY IMPORTANTE):
+- El año SIEMPRE es {now.year} salvo que el usuario diga explícitamente otro año
+- "mañana" = {(now).strftime('%Y-%m-%d')} + 1 día
+- "la semana que viene" = lunes próximo de la semana siguiente
+- si dice solo hora sin día = hoy ({now.strftime('%Y-%m-%d')}) si la hora no pasó, mañana si ya pasó
 - "a la tardecita" = 18:00, "a la mañana" = 09:00, "al mediodía" = 12:00
 - "en X minutos/horas" = ahora + X
-- si NO se menciona ninguna hora ni fecha = exactamente 1 hora desde ahora
+- si NO se menciona ninguna hora ni fecha = exactamente 1 hora desde ahora ({(now).strftime('%Y-%m-%dT%H:%M')} + 1h)
 """
     try:
         text = await _gemini_text(prompt, notify_cb=notify_cb)
@@ -201,19 +202,20 @@ async def analyze_voice_with_gemini(audio_bytes: bytes, now: datetime, notify_cb
     Transcribe y analiza un mensaje de voz.
     Devuelve dict con 'transcripcion' y opcionalmente datos de recordatorio.
     """
-    prompt = f"""Hoy es {now.strftime('%A %d/%m/%Y %H:%M')} (hora Argentina, UTC-3).
+    prompt = f"""Hoy es {now.strftime('%A %d/%m/%Y %H:%M')} (hora Argentina, UTC-3). AÑO ACTUAL: {now.year}.
 
 Escuchá este mensaje de voz y:
 1. Transcribilo literalmente
 2. Si es un pedido de recordatorio, extraé fecha/hora y texto
 
 Respondé SOLO con JSON válido, sin markdown:
-Si es recordatorio: {{"transcripcion": "...", "es_recordatorio": true, "datetime": "2025-01-15T10:00:00-03:00", "texto": "llamar al médico"}}
+Si es recordatorio: {{"transcripcion": "...", "es_recordatorio": true, "datetime": "{now.year}-01-15T10:00:00-03:00", "texto": "llamar al médico"}}
 Si NO es recordatorio: {{"transcripcion": "...", "es_recordatorio": false}}
 
-Reglas de fecha:
-- "mañana" = día siguiente
-- si dice solo hora sin día = hoy si la hora no pasó, mañana si ya pasó
+Reglas de fecha (MUY IMPORTANTE):
+- El año SIEMPRE es {now.year} salvo que el usuario diga explícitamente otro año
+- "mañana" = {now.strftime('%Y-%m-%d')} + 1 día
+- si dice solo hora sin día = hoy ({now.strftime('%Y-%m-%d')}) si la hora no pasó, mañana si ya pasó
 - "a la tardecita" = 18:00, "a la mañana" = 09:00, "al mediodía" = 12:00
 - "en X minutos/horas" = ahora + X
 - si NO se menciona ninguna hora ni fecha = exactamente 1 hora desde ahora
