@@ -73,6 +73,28 @@ def load_pending_from_supabase():
         .execute()
     return result.data
 
+def upsert_usuario(chat_id: int, nombre: str):
+    supabase.table("usuarios").upsert({
+        "chat_id": chat_id,
+        "nombre":  nombre,
+    }).execute()
+
+def get_usuario_por_nombre(nombre: str) -> dict | None:
+    """Busca usuario por nombre (case-insensitive, coincidencia parcial)."""
+    result = supabase.table("usuarios").select("*").execute()
+    nombre_lower = nombre.lower().strip()
+    for u in (result.data or []):
+        if nombre_lower in u["nombre"].lower():
+            return u
+    return None
+
+def get_nombre_usuario(chat_id: int) -> str:
+    """Devuelve el nombre del usuario o 'alguien'."""
+    result = supabase.table("usuarios").select("nombre").eq("chat_id", chat_id).execute()
+    if result.data:
+        return result.data[0]["nombre"]
+    return "alguien"
+
 # ─────────────────────────────────────────────
 # GEMINI helpers
 # ─────────────────────────────────────────────
@@ -107,14 +129,20 @@ El usuario escribió: "{user_text}"
 Si es un pedido de recordatorio, extraé:
 - fecha y hora exacta en formato ISO 8601 con timezone -03:00
 - el texto del recordatorio (qué hay que recordar)
+- si es PARA OTRA PERSONA (ej: "recordale a Lore", "recordá a Pablo"), agregá el campo "para" con ese nombre
 
-Respondé SOLO con JSON válido, sin markdown, sin explicaciones:
+Respondé SOLO con JSON válido, sin markdown, sin explicaciones.
+
+Para uno mismo:
 {{"es_recordatorio": true, "datetime": "2025-01-15T10:00:00-03:00", "texto": "llamar al médico"}}
+
+Para otra persona (solo si se menciona explícitamente):
+{{"es_recordatorio": true, "datetime": "2025-01-15T10:00:00-03:00", "texto": "llamar al médico", "para": "Lore"}}
 
 Si NO es un pedido de recordatorio:
 {{"es_recordatorio": false}}
 
-Reglas:
+Reglas de fecha:
 - "mañana" = día siguiente
 - "la semana que viene" = lunes próximo
 - si dice solo hora sin día = hoy si la hora no pasó, mañana si ya pasó
@@ -213,30 +241,9 @@ async def handle_text(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await update.message.reply_text("⚠️ No pude procesar tu mensaje ahora (límite de API). Intentá en un momento.")
         return
 
-    if parsed and parsed.get("es_recordatorio"):
+    if parsed.get("es_recordatorio"):
         try:
-            scheduled_at  = datetime.fromisoformat(parsed["datetime"]).astimezone(TZ)
-            reminder_text = parsed["texto"]
-
-            if scheduled_at <= now:
-                await update.message.reply_text("⚠️ Esa fecha/hora ya pasó. ¿Querés que lo programe para otro momento?")
-                return
-
-            job_id = str(uuid.uuid4())
-            scheduler.add_job(
-                send_reminder,
-                trigger="date",
-                run_date=scheduled_at,
-                args=[chat_id, reminder_text, job_id],
-                id=job_id,
-            )
-            save_reminder(chat_id, reminder_text, scheduled_at, job_id)
-
-            fecha_str = scheduled_at.strftime("%A %d/%m/%Y a las %H:%M")
-            await update.message.reply_text(
-                f"✅ ¡Listo! Te recuerdo el *{fecha_str}*:\n_{reminder_text}_",
-                parse_mode="Markdown"
-            )
+            await agendar_recordatorio(update, parsed, chat_id)
         except Exception as e:
             logger.error(f"Error agendando recordatorio: {e}")
             await update.message.reply_text("❌ No pude agendar el recordatorio. Intentá de nuevo.")
@@ -264,30 +271,12 @@ async def handle_photo(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     analysis = await analyze_image_with_gemini(bytes(image_bytes), "image/jpeg", caption)
 
-    if any(w in caption.lower() for w in ["recordame", "recordá", "recorda"]):
+    if any(w in caption.lower() for w in ["recordame", "recordá", "recorda", "recordale"]):
         combined_text = f"{caption} — Imagen: {analysis}"
         parsed = await parse_reminder_with_gemini(combined_text, now)
-
         if parsed and parsed.get("es_recordatorio"):
             try:
-                scheduled_at  = datetime.fromisoformat(parsed["datetime"]).astimezone(TZ)
-                reminder_text = parsed.get("texto", analysis[:200])
-
-                job_id = str(uuid.uuid4())
-                scheduler.add_job(
-                    send_reminder,
-                    trigger="date",
-                    run_date=scheduled_at,
-                    args=[chat_id, f"{reminder_text}\n\n📷 _(imagen adjunta en el recordatorio original)_", job_id],
-                    id=job_id,
-                )
-                save_reminder(chat_id, reminder_text, scheduled_at, job_id)
-
-                fecha_str = scheduled_at.strftime("%A %d/%m/%Y a las %H:%M")
-                await update.message.reply_text(
-                    f"✅ Recordatorio agendado para el *{fecha_str}*:\n_{reminder_text}_\n\n📷 Imagen analizada: {analysis[:300]}",
-                    parse_mode="Markdown"
-                )
+                await agendar_recordatorio(update, parsed, chat_id)
                 return
             except Exception as e:
                 logger.error(f"Error agendando recordatorio con imagen: {e}")
@@ -316,32 +305,10 @@ async def handle_voice(update: Update, context: ContextTypes.DEFAULT_TYPE):
     transcripcion = result.get("transcripcion", "")
 
     if result.get("es_recordatorio"):
+        if not result.get("texto"):
+            result["texto"] = transcripcion[:200]
         try:
-            scheduled_at  = datetime.fromisoformat(result["datetime"]).astimezone(TZ)
-            reminder_text = result.get("texto", transcripcion[:200])
-
-            if scheduled_at <= now:
-                await update.message.reply_text(
-                    f"🎙️ _\"{transcripcion}\"_\n\n⚠️ Esa fecha/hora ya pasó. ¿Querés que lo programe para otro momento?",
-                    parse_mode="Markdown"
-                )
-                return
-
-            job_id = str(uuid.uuid4())
-            scheduler.add_job(
-                send_reminder,
-                trigger="date",
-                run_date=scheduled_at,
-                args=[chat_id, reminder_text, job_id],
-                id=job_id,
-            )
-            save_reminder(chat_id, reminder_text, scheduled_at, job_id)
-
-            fecha_str = scheduled_at.strftime("%A %d/%m/%Y a las %H:%M")
-            await update.message.reply_text(
-                f"🎙️ _\"{transcripcion}\"_\n\n✅ ¡Listo! Te recuerdo el *{fecha_str}*:\n_{reminder_text}_",
-                parse_mode="Markdown"
-            )
+            await agendar_recordatorio(update, result, chat_id, transcripcion)
         except Exception as e:
             logger.error(f"Error agendando recordatorio de voz: {e}")
             await update.message.reply_text("❌ No pude agendar el recordatorio. Intentá de nuevo.")
@@ -374,16 +341,86 @@ async def handle_document(update: Update, context: ContextTypes.DEFAULT_TYPE):
 # COMANDOS
 # ─────────────────────────────────────────────
 
+async def agendar_recordatorio(update: Update, parsed: dict, sender_chat_id: int, transcripcion: str = "") -> bool:
+    """
+    Agenda un recordatorio según parsed. Maneja destinatario propio o de otra persona.
+    Devuelve True si se agendó, False si falló.
+    """
+    now           = datetime.now(TZ)
+    scheduled_at  = datetime.fromisoformat(parsed["datetime"]).astimezone(TZ)
+    reminder_text = parsed["texto"]
+    nombre_para   = parsed.get("para", "").strip()
+
+    if scheduled_at <= now:
+        prefix = f'🎙️ _"{transcripcion}"_\n\n' if transcripcion else ""
+        await update.message.reply_text(
+            prefix + "⚠️ Esa fecha/hora ya pasó. ¿Querés que lo programe para otro momento?",
+            parse_mode="Markdown"
+        )
+        return False
+
+    # Resolver destinatario
+    dest_chat_id  = sender_chat_id
+    dest_nombre   = None
+    if nombre_para:
+        usuario = get_usuario_por_nombre(nombre_para)
+        if usuario:
+            dest_chat_id = usuario["chat_id"]
+            dest_nombre  = usuario["nombre"]
+        else:
+            await update.message.reply_text(
+                f"⚠️ No encontré a *{nombre_para}* en mis contactos. "
+                f"Pedile que le escriba /start al bot primero.",
+                parse_mode="Markdown"
+            )
+            return False
+
+    job_id = str(uuid.uuid4())
+    mi_nombre = get_nombre_usuario(sender_chat_id)
+
+    # Texto que llegará al destinatario
+    if dest_chat_id != sender_chat_id:
+        texto_recordatorio = f"{mi_nombre} te mandó este recordatorio:\n{reminder_text}"
+    else:
+        texto_recordatorio = reminder_text
+
+    scheduler.add_job(
+        send_reminder,
+        trigger="date",
+        run_date=scheduled_at,
+        args=[dest_chat_id, texto_recordatorio, job_id],
+        id=job_id,
+    )
+    save_reminder(dest_chat_id, texto_recordatorio, scheduled_at, job_id)
+
+    fecha_str = scheduled_at.strftime("%A %d/%m/%Y a las %H:%M")
+    prefix    = f'🎙️ _"{transcripcion}"_\n\n' if transcripcion else ""
+
+    if dest_chat_id != sender_chat_id:
+        await update.message.reply_text(
+            prefix + f"✅ Le agendé a *{dest_nombre}* para el *{fecha_str}*:\n_{reminder_text}_",
+            parse_mode="Markdown"
+        )
+    else:
+        await update.message.reply_text(
+            prefix + f"✅ ¡Listo! Te recuerdo el *{fecha_str}*:\n_{reminder_text}_",
+            parse_mode="Markdown"
+        )
+    return True
+
+
 async def cmd_start(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    chat_id = update.effective_chat.id
+    chat_id    = update.effective_chat.id
+    first_name = update.effective_user.first_name or "Usuario"
+    upsert_usuario(chat_id, first_name)
     await update.message.reply_text(
-        f"👋 ¡Hola! Soy tu bot de recordatorios.\n\n"
-        f"Tu chat ID es: `{chat_id}`\n\n"
+        f"👋 ¡Hola, {first_name}! Soy tu bot de recordatorios.\n\n"
         f"Podés decirme cosas como:\n"
         f"• _Recordame mañana a las 10hs llamar al médico_\n"
         f"• _Recordame el viernes a las 18hs comprar pan_\n"
-        f"• _Recordame en 2 horas revisar el horno_\n\n"
-        f"También podés mandarme fotos con o sin mensaje.",
+        f"• _Recordame en 2 horas revisar el horno_\n"
+        f"• _Recordale a Lore que llame al banco el lunes a las 11_\n\n"
+        f"También podés mandarme fotos o audios.",
         parse_mode="Markdown"
     )
 
