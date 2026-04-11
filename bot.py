@@ -143,36 +143,41 @@ async def _gemini_media(media_bytes: bytes, mime_type: str, prompt: str, notify_
     ]}]}
     return await _gemini_post(payload, timeout=45, notify_cb=notify_cb)
 
-async def parse_reminder_with_gemini(user_text: str, now: datetime, notify_cb=None) -> dict | None:
-    """Extrae fecha/hora y texto del recordatorio usando Gemini."""
+async def parse_reminder_with_gemini(user_text: str, now: datetime, notify_cb=None) -> dict | list | None:
+    """
+    Extrae recordatorio(s) usando Gemini.
+    Devuelve: dict (uno), list (varios), o None (error).
+    """
     prompt = f"""Hoy es {now.strftime('%A %d/%m/%Y %H:%M')} (hora Argentina, UTC-3). AÑO ACTUAL: {now.year}.
 
 El usuario escribió: "{user_text}"
 
-Si es un pedido de recordatorio, extraé:
-- fecha y hora exacta en formato ISO 8601 con timezone -03:00
-- el texto del recordatorio (qué hay que recordar)
-- si es PARA OTRA PERSONA (ej: "recordale a Lore", "recordá a Pablo"), agregá el campo "para" con ese nombre
-
 Respondé SOLO con JSON válido, sin markdown, sin explicaciones.
 
-Para uno mismo:
-{{"es_recordatorio": true, "datetime": "{now.year}-01-15T10:00:00-03:00", "texto": "llamar al médico"}}
+━━ CASO 1: UN solo recordatorio ━━
+{{"es_recordatorio": true, "datetime": "{now.year}-05-15T09:00:00-03:00", "texto": "cumple de Juan"}}
 
-Para otra persona (solo si se menciona explícitamente):
-{{"es_recordatorio": true, "datetime": "{now.year}-01-15T10:00:00-03:00", "texto": "llamar al médico", "para": "Lore"}}
+Con destinatario explícito:
+{{"es_recordatorio": true, "datetime": "{now.year}-05-15T09:00:00-03:00", "texto": "cumple de Juan", "para": "Lore"}}
 
-Si NO es un pedido de recordatorio:
+━━ CASO 2: MÚLTIPLES recordatorios (lista, agenda, cumpleaños, etc.) ━━
+Devolvé un array JSON con cada uno:
+[
+  {{"es_recordatorio": true, "datetime": "{now.year}-05-15T09:00:00-03:00", "texto": "cumple de Juan"}},
+  {{"es_recordatorio": true, "datetime": "{now.year}-06-23T09:00:00-03:00", "texto": "cumple de María"}}
+]
+
+━━ CASO 3: NO es un recordatorio ━━
 {{"es_recordatorio": false}}
 
 Reglas de fecha (MUY IMPORTANTE):
 - El año SIEMPRE es {now.year} salvo que el usuario diga explícitamente otro año
-- "mañana" = {(now).strftime('%Y-%m-%d')} + 1 día
+- "mañana" = {now.strftime('%Y-%m-%d')} + 1 día
 - "la semana que viene" = lunes próximo de la semana siguiente
 - si dice solo hora sin día = hoy ({now.strftime('%Y-%m-%d')}) si la hora no pasó, mañana si ya pasó
 - "a la tardecita" = 18:00, "a la mañana" = 09:00, "al mediodía" = 12:00
 - "en X minutos/horas" = ahora + X
-- si NO se menciona ninguna hora ni fecha = exactamente 1 hora desde ahora ({(now).strftime('%Y-%m-%dT%H:%M')} + 1h)
+- si NO se menciona hora = 09:00 para fechas futuras, 1 hora desde ahora para hoy/inmediato
 """
     try:
         text = await _gemini_text(prompt, notify_cb=notify_cb)
@@ -285,6 +290,33 @@ async def handle_text(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await update.message.reply_text("⚠️ No pude procesar tu mensaje ahora (límite de API). Intentá en un momento.")
         return
 
+    # ── Lista de recordatorios ──
+    if isinstance(parsed, list):
+        items = [p for p in parsed if isinstance(p, dict) and p.get("es_recordatorio")]
+        if not items:
+            await update.message.reply_text("❓ No encontré recordatorios válidos en la lista.")
+            return
+        ok, fail = 0, 0
+        lines = []
+        for item in items:
+            try:
+                resultado = await agendar_recordatorio(update, item, chat_id, silent=True)
+                if resultado:
+                    dt = datetime.fromisoformat(item["datetime"]).astimezone(TZ)
+                    lines.append(f"✅ {dt.strftime('%d/%m/%Y')} — {item['texto']}")
+                    ok += 1
+                else:
+                    lines.append(f"⚠️ (fecha pasada) — {item.get('texto','')}")
+                    fail += 1
+            except Exception as e:
+                logger.error(f"Error agendando item de lista: {e}")
+                lines.append(f"❌ Error — {item.get('texto','')}")
+                fail += 1
+        resumen = f"📋 Agendé *{ok}* de *{len(items)}* recordatorios:\n\n" + "\n".join(lines)
+        await update.message.reply_text(resumen, parse_mode="Markdown")
+        return
+
+    # ── Recordatorio único ──
     if parsed.get("es_recordatorio"):
         try:
             await agendar_recordatorio(update, parsed, chat_id)
@@ -400,9 +432,10 @@ async def handle_document(update: Update, context: ContextTypes.DEFAULT_TYPE):
 # COMANDOS
 # ─────────────────────────────────────────────
 
-async def agendar_recordatorio(update: Update, parsed: dict, sender_chat_id: int, transcripcion: str = "") -> bool:
+async def agendar_recordatorio(update: Update, parsed: dict, sender_chat_id: int, transcripcion: str = "", silent: bool = False) -> bool:
     """
     Agenda un recordatorio según parsed. Maneja destinatario propio o de otra persona.
+    silent=True: no envía mensaje de confirmación (para uso en lotes).
     Devuelve True si se agendó, False si falló.
     """
     now           = datetime.now(TZ)
@@ -455,16 +488,17 @@ async def agendar_recordatorio(update: Update, parsed: dict, sender_chat_id: int
     fecha_str = scheduled_at.strftime("%A %d/%m/%Y a las %H:%M")
     prefix    = f'🎙️ _"{transcripcion}"_\n\n' if transcripcion else ""
 
-    if dest_chat_id != sender_chat_id:
-        await update.message.reply_text(
-            prefix + f"✅ Le agendé a *{dest_nombre}* para el *{fecha_str}*:\n_{reminder_text}_",
-            parse_mode="Markdown"
-        )
-    else:
-        await update.message.reply_text(
-            prefix + f"✅ ¡Listo! Te recuerdo el *{fecha_str}*:\n_{reminder_text}_",
-            parse_mode="Markdown"
-        )
+    if not silent:
+        if dest_chat_id != sender_chat_id:
+            await update.message.reply_text(
+                prefix + f"✅ Le agendé a *{dest_nombre}* para el *{fecha_str}*:\n_{reminder_text}_",
+                parse_mode="Markdown"
+            )
+        else:
+            await update.message.reply_text(
+                prefix + f"✅ ¡Listo! Te recuerdo el *{fecha_str}*:\n_{reminder_text}_",
+                parse_mode="Markdown"
+            )
     return True
 
 
