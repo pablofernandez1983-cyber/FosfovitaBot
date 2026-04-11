@@ -21,7 +21,10 @@ TELEGRAM_TOKEN = os.environ["TELEGRAM_TOKEN"]
 GEMINI_API_KEY = os.environ["GEMINI_API_KEY"]
 SUPABASE_URL   = os.environ["SUPABASE_URL"]
 SUPABASE_KEY   = os.environ["SUPABASE_KEY"]
-ALLOWED_USER_ID = int(os.environ.get("ALLOWED_USER_ID", "0"))
+# Soporta uno o varios IDs separados por coma: "123456,789012"
+# Si está vacío o es "0", permite a todos
+_raw_ids = os.environ.get("ALLOWED_USER_IDS", os.environ.get("ALLOWED_USER_ID", "0"))
+ALLOWED_USER_IDS = set(int(x.strip()) for x in _raw_ids.split(",") if x.strip()) - {0}
 TZ = pytz.timezone("America/Argentina/Buenos_Aires")
 
 # Clients
@@ -192,9 +195,9 @@ async def send_reminder(chat_id: int, text: str, job_id: str):
 # ─────────────────────────────────────────────
 
 def is_allowed(update: Update) -> bool:
-    if ALLOWED_USER_ID == 0:
+    if not ALLOWED_USER_IDS:  # vacío = todos permitidos
         return True
-    return update.effective_user.id == ALLOWED_USER_ID
+    return update.effective_user.id in ALLOWED_USER_IDS
 
 async def handle_text(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if not is_allowed(update):
