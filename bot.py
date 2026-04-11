@@ -148,6 +148,7 @@ Reglas de fecha:
 - si dice solo hora sin día = hoy si la hora no pasó, mañana si ya pasó
 - "a la tardecita" = 18:00, "a la mañana" = 09:00, "al mediodía" = 12:00
 - "en X minutos/horas" = ahora + X
+- si NO se menciona ninguna hora ni fecha = exactamente 1 hora desde ahora
 """
     try:
         text = await _gemini_text(prompt)
@@ -192,6 +193,7 @@ Reglas de fecha:
 - si dice solo hora sin día = hoy si la hora no pasó, mañana si ya pasó
 - "a la tardecita" = 18:00, "a la mañana" = 09:00, "al mediodía" = 12:00
 - "en X minutos/horas" = ahora + X
+- si NO se menciona ninguna hora ni fecha = exactamente 1 hora desde ahora
 """
     try:
         text = await _gemini_media(audio_bytes, "audio/ogg", prompt)
