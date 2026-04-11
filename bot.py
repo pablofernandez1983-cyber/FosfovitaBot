@@ -82,15 +82,15 @@ async def _gemini_text(prompt: str) -> str:
         r.raise_for_status()
         return r.json()["candidates"][0]["content"]["parts"][0]["text"].strip()
 
-async def _gemini_image(image_bytes: bytes, mime_type: str, prompt: str) -> str:
-    """Llama a Gemini con imagen + texto via REST."""
+async def _gemini_media(media_bytes: bytes, mime_type: str, prompt: str) -> str:
+    """Llama a Gemini con audio o imagen + texto via REST."""
     import base64
-    b64 = base64.b64encode(image_bytes).decode()
+    b64 = base64.b64encode(media_bytes).decode()
     payload = {"contents": [{"parts": [
         {"inline_data": {"mime_type": mime_type, "data": b64}},
         {"text": prompt},
     ]}]}
-    async with httpx.AsyncClient(timeout=30) as client:
+    async with httpx.AsyncClient(timeout=45) as client:
         r = await client.post(f"{GEMINI_URL}?key={GEMINI_API_KEY}", json=payload)
         r.raise_for_status()
         return r.json()["candidates"][0]["content"]["parts"][0]["text"].strip()
@@ -136,10 +136,42 @@ async def analyze_image_with_gemini(image_bytes: bytes, mime_type: str, caption:
         prompt = f"""El usuario mandó esta imagen con el mensaje: "{caption}"
 Describí qué hay en la imagen y si hay fechas, eventos, o información relevante para un recordatorio."""
     try:
-        return await _gemini_image(image_bytes, mime_type, prompt)
+        return await _gemini_media(image_bytes, mime_type, prompt)
     except Exception as e:
         logger.error(f"Error analizando imagen con Gemini: {e}")
         return "No pude analizar la imagen en este momento."
+
+async def analyze_voice_with_gemini(audio_bytes: bytes, now: datetime) -> dict:
+    """
+    Transcribe y analiza un mensaje de voz.
+    Devuelve dict con 'transcripcion' y opcionalmente datos de recordatorio.
+    """
+    prompt = f"""Hoy es {now.strftime('%A %d/%m/%Y %H:%M')} (hora Argentina, UTC-3).
+
+Escuchá este mensaje de voz y:
+1. Transcribilo literalmente
+2. Si es un pedido de recordatorio, extraé fecha/hora y texto
+
+Respondé SOLO con JSON válido, sin markdown:
+Si es recordatorio: {{"transcripcion": "...", "es_recordatorio": true, "datetime": "2025-01-15T10:00:00-03:00", "texto": "llamar al médico"}}
+Si NO es recordatorio: {{"transcripcion": "...", "es_recordatorio": false}}
+
+Reglas de fecha:
+- "mañana" = día siguiente
+- si dice solo hora sin día = hoy si la hora no pasó, mañana si ya pasó
+- "a la tardecita" = 18:00, "a la mañana" = 09:00, "al mediodía" = 12:00
+- "en X minutos/horas" = ahora + X
+"""
+    try:
+        text = await _gemini_media(audio_bytes, "audio/ogg", prompt)
+        text = re.sub(r"```json|```", "", text).strip()
+        return json.loads(text)
+    except json.JSONDecodeError:
+        logger.error(f"Error parseando JSON de voz: {text}")
+        return {"transcripcion": text, "es_recordatorio": False}
+    except Exception as e:
+        logger.error(f"Error analizando voz con Gemini: {e}")
+        return None
 
 # ─────────────────────────────────────────────
 # SCHEDULER: enviar recordatorio
@@ -258,6 +290,68 @@ async def handle_photo(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 logger.error(f"Error agendando recordatorio con imagen: {e}")
 
     await update.message.reply_text(f"🖼️ {analysis}")
+
+async def handle_voice(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    if not is_allowed(update):
+        return
+
+    chat_id = update.effective_chat.id
+    now     = datetime.now(TZ)
+
+    await update.message.reply_text("🎙️ Escuchando...")
+
+    voice = update.message.voice
+    file  = await context.bot.get_file(voice.file_id)
+    audio_bytes = await file.download_as_bytearray()
+
+    result = await analyze_voice_with_gemini(bytes(audio_bytes), now)
+
+    if result is None:
+        await update.message.reply_text("⚠️ No pude procesar el audio ahora. Intentá en un momento.")
+        return
+
+    transcripcion = result.get("transcripcion", "")
+
+    if result.get("es_recordatorio"):
+        try:
+            scheduled_at  = datetime.fromisoformat(result["datetime"]).astimezone(TZ)
+            reminder_text = result.get("texto", transcripcion[:200])
+
+            if scheduled_at <= now:
+                await update.message.reply_text(
+                    f"🎙️ _\"{transcripcion}\"_\n\n⚠️ Esa fecha/hora ya pasó. ¿Querés que lo programe para otro momento?",
+                    parse_mode="Markdown"
+                )
+                return
+
+            job_id = str(uuid.uuid4())
+            scheduler.add_job(
+                send_reminder,
+                trigger="date",
+                run_date=scheduled_at,
+                args=[chat_id, reminder_text, job_id],
+                id=job_id,
+            )
+            save_reminder(chat_id, reminder_text, scheduled_at, job_id)
+
+            fecha_str = scheduled_at.strftime("%A %d/%m/%Y a las %H:%M")
+            await update.message.reply_text(
+                f"🎙️ _\"{transcripcion}\"_\n\n✅ ¡Listo! Te recuerdo el *{fecha_str}*:\n_{reminder_text}_",
+                parse_mode="Markdown"
+            )
+        except Exception as e:
+            logger.error(f"Error agendando recordatorio de voz: {e}")
+            await update.message.reply_text("❌ No pude agendar el recordatorio. Intentá de nuevo.")
+    else:
+        # Respuesta libre al audio
+        try:
+            respuesta = await _gemini_text(
+                f"Sos un asistente personal amigable. El usuario dijo por voz: \"{transcripcion}\"\nRespondé en español rioplatense, breve y directo."
+            )
+            await update.message.reply_text(f"🎙️ _\"{transcripcion}\"_\n\n{respuesta}", parse_mode="Markdown")
+        except Exception:
+            await update.message.reply_text(f"🎙️ Escuché: _{transcripcion}_", parse_mode="Markdown")
+
 
 async def handle_document(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if not is_allowed(update):
@@ -396,6 +490,7 @@ def main():
     app.add_handler(CommandHandler("lista", cmd_lista))
     app.add_handler(CommandHandler("borrar", cmd_borrar))
     app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_text))
+    app.add_handler(MessageHandler(filters.VOICE, handle_voice))
     app.add_handler(MessageHandler(filters.PHOTO, handle_photo))
     app.add_handler(MessageHandler(filters.Document.ALL, handle_document))
 
