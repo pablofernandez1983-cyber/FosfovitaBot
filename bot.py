@@ -29,7 +29,7 @@ ALLOWED_USER_IDS = set(int(x.strip()) for x in _raw_ids.split(",") if x.strip())
 TZ = pytz.timezone("America/Argentina/Buenos_Aires")
 
 # Clients
-GEMINI_URL = "https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent"
+GEMINI_URL = "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent"
 supabase   = create_client(SUPABASE_URL, SUPABASE_KEY)
 
 # Scheduler en memoria (jobs se persisten en Supabase)
