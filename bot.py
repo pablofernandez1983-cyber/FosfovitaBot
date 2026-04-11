@@ -4,10 +4,10 @@ import asyncio
 import uuid
 from datetime import datetime
 import pytz
+import httpx
 from telegram import Update, Bot
 from telegram.ext import Application, MessageHandler, CommandHandler, filters, ContextTypes
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
-import google.generativeai as genai
 from supabase import create_client
 import json
 import re
@@ -25,9 +25,8 @@ ALLOWED_USER_ID = int(os.environ.get("ALLOWED_USER_ID", "0"))
 TZ = pytz.timezone("America/Argentina/Buenos_Aires")
 
 # Clients
-genai.configure(api_key=GEMINI_API_KEY)
-gemini  = genai.GenerativeModel("gemini-1.5-flash")
-supabase = create_client(SUPABASE_URL, SUPABASE_KEY)
+GEMINI_URL = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-lite:generateContent"
+supabase   = create_client(SUPABASE_URL, SUPABASE_KEY)
 
 # Scheduler en memoria (jobs se persisten en Supabase)
 scheduler = AsyncIOScheduler(timezone=TZ)
@@ -75,7 +74,28 @@ def load_pending_from_supabase():
 # GEMINI helpers
 # ─────────────────────────────────────────────
 
-def parse_reminder_with_gemini(user_text: str, now: datetime) -> dict | None:
+async def _gemini_text(prompt: str) -> str:
+    """Llama a Gemini via REST y devuelve el texto de la respuesta."""
+    payload = {"contents": [{"parts": [{"text": prompt}]}]}
+    async with httpx.AsyncClient(timeout=30) as client:
+        r = await client.post(f"{GEMINI_URL}?key={GEMINI_API_KEY}", json=payload)
+        r.raise_for_status()
+        return r.json()["candidates"][0]["content"]["parts"][0]["text"].strip()
+
+async def _gemini_image(image_bytes: bytes, mime_type: str, prompt: str) -> str:
+    """Llama a Gemini con imagen + texto via REST."""
+    import base64
+    b64 = base64.b64encode(image_bytes).decode()
+    payload = {"contents": [{"parts": [
+        {"inline_data": {"mime_type": mime_type, "data": b64}},
+        {"text": prompt},
+    ]}]}
+    async with httpx.AsyncClient(timeout=30) as client:
+        r = await client.post(f"{GEMINI_URL}?key={GEMINI_API_KEY}", json=payload)
+        r.raise_for_status()
+        return r.json()["candidates"][0]["content"]["parts"][0]["text"].strip()
+
+async def parse_reminder_with_gemini(user_text: str, now: datetime) -> dict | None:
     """Extrae fecha/hora y texto del recordatorio usando Gemini."""
     prompt = f"""Hoy es {now.strftime('%A %d/%m/%Y %H:%M')} (hora Argentina, UTC-3).
 
@@ -99,8 +119,7 @@ Reglas:
 - "en X minutos/horas" = ahora + X
 """
     try:
-        response = gemini.generate_content(prompt)
-        text = response.text.strip()
+        text = await _gemini_text(prompt)
         text = re.sub(r"```json|```", "", text).strip()
         return json.loads(text)
     except json.JSONDecodeError:
@@ -110,19 +129,17 @@ Reglas:
         logger.error(f"Error llamando a Gemini: {e}")
         return None
 
-def analyze_image_with_gemini(image_bytes: bytes, mime_type: str, caption: str = "") -> str:
+async def analyze_image_with_gemini(image_bytes: bytes, mime_type: str, caption: str = "") -> str:
     """Analiza una imagen y devuelve descripción o respuesta."""
     prompt = caption if caption else "Describí esta imagen en detalle en español."
-
     if any(w in caption.lower() for w in ["recordame", "recordá", "recorda", "reminder"]):
         prompt = f"""El usuario mandó esta imagen con el mensaje: "{caption}"
 Describí qué hay en la imagen y si hay fechas, eventos, o información relevante para un recordatorio."""
-
-    response = gemini.generate_content([
-        {"mime_type": mime_type, "data": image_bytes},
-        prompt
-    ])
-    return response.text
+    try:
+        return await _gemini_image(image_bytes, mime_type, prompt)
+    except Exception as e:
+        logger.error(f"Error analizando imagen con Gemini: {e}")
+        return "No pude analizar la imagen en este momento."
 
 # ─────────────────────────────────────────────
 # SCHEDULER: enviar recordatorio
@@ -155,7 +172,7 @@ async def handle_text(update: Update, context: ContextTypes.DEFAULT_TYPE):
     chat_id = update.effective_chat.id
     now     = datetime.now(TZ)
 
-    parsed = parse_reminder_with_gemini(text, now)
+    parsed = await parse_reminder_with_gemini(text, now)
 
     if parsed is None:
         await update.message.reply_text("⚠️ No pude procesar tu mensaje ahora (límite de API). Intentá en un momento.")
@@ -189,10 +206,14 @@ async def handle_text(update: Update, context: ContextTypes.DEFAULT_TYPE):
             logger.error(f"Error agendando recordatorio: {e}")
             await update.message.reply_text("❌ No pude agendar el recordatorio. Intentá de nuevo.")
     else:
-        response = gemini.generate_content(
-            f"Sos un asistente personal amigable. Respondé en español rioplatense, breve y directo.\n\nUsuario: {text}"
-        )
-        await update.message.reply_text(response.text)
+        try:
+            response = await _gemini_text(
+                f"Sos un asistente personal amigable. Respondé en español rioplatense, breve y directo.\n\nUsuario: {text}"
+            )
+            await update.message.reply_text(response)
+        except Exception as e:
+            logger.error(f"Error Gemini respuesta libre: {e}")
+            await update.message.reply_text("⚠️ No puedo responder ahora (límite de API). Intentá en un momento.")
 
 async def handle_photo(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if not is_allowed(update):
@@ -206,11 +227,11 @@ async def handle_photo(update: Update, context: ContextTypes.DEFAULT_TYPE):
     file       = await context.bot.get_file(photo.file_id)
     image_bytes = await file.download_as_bytearray()
 
-    analysis = analyze_image_with_gemini(bytes(image_bytes), "image/jpeg", caption)
+    analysis = await analyze_image_with_gemini(bytes(image_bytes), "image/jpeg", caption)
 
     if any(w in caption.lower() for w in ["recordame", "recordá", "recorda"]):
         combined_text = f"{caption} — Imagen: {analysis}"
-        parsed = parse_reminder_with_gemini(combined_text, now)
+        parsed = await parse_reminder_with_gemini(combined_text, now)
 
         if parsed and parsed.get("es_recordatorio"):
             try:
@@ -247,7 +268,7 @@ async def handle_document(update: Update, context: ContextTypes.DEFAULT_TYPE):
         file        = await context.bot.get_file(doc.file_id)
         image_bytes = await file.download_as_bytearray()
         caption     = update.message.caption or ""
-        analysis    = analyze_image_with_gemini(bytes(image_bytes), doc.mime_type, caption)
+        analysis    = await analyze_image_with_gemini(bytes(image_bytes), doc.mime_type, caption)
         await update.message.reply_text(f"🖼️ {analysis}")
     else:
         await update.message.reply_text("Por ahora solo proceso imágenes. ¡Mandame una foto!")
