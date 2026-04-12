@@ -5,7 +5,7 @@ import uuid
 from datetime import datetime
 import pytz
 import httpx
-from telegram import Update, Bot, MenuButtonWebApp, WebAppInfo, ReplyKeyboardMarkup, KeyboardButton
+from telegram import Update, Bot, MenuButtonWebApp, WebAppInfo, InlineKeyboardMarkup, InlineKeyboardButton
 from telegram.ext import Application, MessageHandler, CommandHandler, filters, ContextTypes
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
 from supabase import create_client
@@ -35,15 +35,13 @@ supabase   = create_client(SUPABASE_URL, SUPABASE_KEY)
 # Scheduler en memoria (jobs se persisten en Supabase)
 scheduler = AsyncIOScheduler(timezone=TZ)
 
-def main_keyboard():
-    """Teclado persistente con botón de Mini App."""
+def mini_app_button():
+    """Inline button que abre la Mini App."""
     if not MINI_APP_URL:
         return None
-    return ReplyKeyboardMarkup(
-        [[KeyboardButton("📋 Mis Recordatorios", web_app=WebAppInfo(url=MINI_APP_URL))]],
-        resize_keyboard=True,
-        is_persistent=True,
-    )
+    return InlineKeyboardMarkup([[
+        InlineKeyboardButton("📋 Ver mis recordatorios", web_app=WebAppInfo(url=MINI_APP_URL))
+    ]])
 
 # ─────────────────────────────────────────────
 # SUPABASE helpers
@@ -323,7 +321,7 @@ async def handle_text(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 lines.append(f"❌ Error — {item.get('texto','')}")
                 fail += 1
         resumen = f"📋 Agendé *{ok}* de *{len(items)}* recordatorios:\n\n" + "\n".join(lines)
-        await update.message.reply_text(resumen, parse_mode="Markdown", reply_markup=main_keyboard())
+        await update.message.reply_text(resumen, parse_mode="Markdown", reply_markup=mini_app_button())
         return
 
     # ── Recordatorio único ──
@@ -503,13 +501,13 @@ async def agendar_recordatorio(update: Update, parsed: dict, sender_chat_id: int
             await update.message.reply_text(
                 prefix + f"✅ Le agendé a *{dest_nombre}* para el *{fecha_str}*:\n_{reminder_text}_",
                 parse_mode="Markdown",
-                reply_markup=main_keyboard(),
+                reply_markup=mini_app_button(),
             )
         else:
             await update.message.reply_text(
                 prefix + f"✅ ¡Listo! Te recuerdo el *{fecha_str}*:\n_{reminder_text}_",
                 parse_mode="Markdown",
-                reply_markup=main_keyboard(),
+                reply_markup=mini_app_button(),
             )
     return True
 
@@ -525,10 +523,8 @@ async def cmd_start(update: Update, context: ContextTypes.DEFAULT_TYPE):
         f"• _Recordame el viernes a las 18hs comprar pan_\n"
         f"• _Recordame en 2 horas revisar el horno_\n"
         f"• _Recordale a Lore que llame al banco el lunes a las 11_\n\n"
-        f"También podés mandarme fotos o audios.\n\n"
-        f"Usá el botón 📋 para ver y gestionar tus recordatorios.",
+        f"También podés mandarme fotos o audios.",
         parse_mode="Markdown",
-        reply_markup=main_keyboard(),
     )
 
 async def cmd_lista(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -619,19 +615,6 @@ async def post_init(app: Application) -> None:
             restored += 1
 
     logger.info(f"Recordatorios restaurados: {restored} futuros, {expired} enviados tardíos")
-
-    # Configurar botón de Mini App si se definió la URL
-    if MINI_APP_URL:
-        try:
-            await app.bot.set_chat_menu_button(
-                menu_button=MenuButtonWebApp(
-                    text="📋 Recordatorios",
-                    web_app=WebAppInfo(url=MINI_APP_URL),
-                )
-            )
-            logger.info(f"Mini App button configurado: {MINI_APP_URL}")
-        except Exception as e:
-            logger.warning(f"No se pudo configurar el botón de Mini App: {e}")
 
     logger.info("Bot iniciado ✅")
 
