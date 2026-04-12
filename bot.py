@@ -332,7 +332,7 @@ async def handle_text(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 lines.append(f"❌ Error — {item.get('texto','')}")
                 fail += 1
         resumen = f"📋 Agendé *{ok}* de *{len(items)}* recordatorios:\n\n" + "\n".join(lines)
-        await update.message.reply_text(resumen, parse_mode="Markdown", reply_markup=mini_app_button())
+        await update.message.reply_text(resumen, parse_mode="Markdown")
         return
 
     # ── Recordatorio único ──
@@ -512,13 +512,11 @@ async def agendar_recordatorio(update: Update, parsed: dict, sender_chat_id: int
             await update.message.reply_text(
                 prefix + f"✅ Le agendé a *{dest_nombre}* para el *{fecha_str}*:\n_{reminder_text}_",
                 parse_mode="Markdown",
-                reply_markup=mini_app_button(),
             )
         else:
             await update.message.reply_text(
                 prefix + f"✅ ¡Listo! Te recuerdo el *{fecha_str}*:\n_{reminder_text}_",
                 parse_mode="Markdown",
-                reply_markup=mini_app_button(),
             )
     return True
 
@@ -626,6 +624,18 @@ async def post_init(app: Application) -> None:
             restored += 1
 
     logger.info(f"Recordatorios restaurados: {restored} futuros, {expired} enviados tardíos")
+
+    # Configurar ícono de Mini App en el menú
+    if MINI_APP_URL:
+        try:
+            await app.bot.set_chat_menu_button(
+                menu_button=MenuButtonWebApp(
+                    text="📋 Recordatorios",
+                    web_app=WebAppInfo(url=MINI_APP_URL),
+                )
+            )
+        except Exception as e:
+            logger.warning(f"No se pudo configurar el botón de Mini App: {e}")
 
     logger.info("Bot iniciado ✅")
 
