@@ -163,10 +163,13 @@ El usuario escribió: "{user_text}"
 Respondé SOLO con JSON válido, sin markdown, sin explicaciones.
 
 ━━ CASO 1: UN solo recordatorio ━━
+Para uno mismo:
 {{"es_recordatorio": true, "datetime": "{now.year}-05-15T09:00:00-03:00", "texto": "cumple de Juan"}}
 
-Con destinatario explícito:
+Para otra persona (cuando usa: recordale, recordarle, avisale, avisarle, agendale, agendarle, recordá a [nombre], avisá a [nombre], mandále un recordatorio a, etc.):
 {{"es_recordatorio": true, "datetime": "{now.year}-05-15T09:00:00-03:00", "texto": "cumple de Juan", "para": "Lore"}}
+Ejemplo: "recordale a Pablo que tiene turno mañana" → "para": "Pablo"
+Ejemplo: "avisale a Lore que llame al banco" → "para": "Lore"
 
 ━━ CASO 2: MÚLTIPLES recordatorios (lista, agenda, cumpleaños, etc.) ━━
 Devolvé un array JSON con cada uno:
@@ -219,11 +222,19 @@ async def analyze_voice_with_gemini(audio_bytes: bytes, now: datetime, notify_cb
 
 Escuchá este mensaje de voz y:
 1. Transcribilo literalmente
-2. Si es un pedido de recordatorio, extraé fecha/hora y texto
+2. Si es un pedido de recordatorio, extraé fecha/hora, texto y destinatario
 
 Respondé SOLO con JSON válido, sin markdown:
-Si es recordatorio: {{"transcripcion": "...", "es_recordatorio": true, "datetime": "{now.year}-01-15T10:00:00-03:00", "texto": "llamar al médico"}}
+
+Para uno mismo: {{"transcripcion": "...", "es_recordatorio": true, "datetime": "{now.year}-05-15T09:00:00-03:00", "texto": "llamar al médico"}}
+Para otra persona: {{"transcripcion": "...", "es_recordatorio": true, "datetime": "{now.year}-05-15T09:00:00-03:00", "texto": "llamar al médico", "para": "Lore"}}
 Si NO es recordatorio: {{"transcripcion": "...", "es_recordatorio": false}}
+
+DESTINATARIO — agregá "para" con el nombre si el usuario usa cualquiera de estos verbos dirigidos a otra persona:
+- recordale, recordarle, avisale, avisarle, agendale, agendarle, mandále un recordatorio, recordá a [nombre], avisá a [nombre]
+- Ejemplo: "recordale a Lore que llame al banco" → "para": "Lore"
+- Ejemplo: "avisale a Pablo que tiene turno" → "para": "Pablo"
+- Solo agregás "para" si menciona EXPLÍCITAMENTE el nombre de otra persona
 
 Reglas de fecha (MUY IMPORTANTE):
 - El año SIEMPRE es {now.year} salvo que el usuario diga explícitamente otro año
@@ -231,7 +242,7 @@ Reglas de fecha (MUY IMPORTANTE):
 - si dice solo hora sin día = hoy ({now.strftime('%Y-%m-%d')}) si la hora no pasó, mañana si ya pasó
 - "a la tardecita" = 18:00, "a la mañana" = 09:00, "al mediodía" = 12:00
 - "en X minutos/horas" = ahora + X
-- si NO se menciona ninguna hora ni fecha = exactamente 1 hora desde ahora
+- si NO se menciona hora = 09:00 para fechas futuras, 1 hora desde ahora para hoy/inmediato
 """
     try:
         text = await _gemini_media(audio_bytes, "audio/ogg", prompt, notify_cb=notify_cb)
