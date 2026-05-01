@@ -1,0 +1,16 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512">
+  <defs>
+    <radialGradient id="bg" cx="38%" cy="32%" r="72%">
+      <stop offset="0%" stop-color="#ff6535"/>
+      <stop offset="100%" stop-color="#c41500"/>
+    </radialGradient>
+  </defs>
+  <rect width="512" height="512" rx="110" fill="url(#bg)"/>
+  <!-- Bell body -->
+  <path fill="white" d="M256 98c-9 0-16 7-16 16v18c-56 15-96 67-96 131v68l-36 38v16h288v-16l-36-38v-68c0-64-40-116-96-131v-18c0-9-7-16-16-16z"/>
+  <!-- Clapper -->
+  <circle cx="256" cy="392" r="33" fill="white"/>
+  <!-- Notification badge -->
+  <circle cx="348" cy="158" r="42" fill="#FFD600"/>
+  <text x="348" y="174" text-anchor="middle" fill="#c41500" font-size="52" font-weight="900" font-family="Arial, sans-serif">!</text>
+</svg>
