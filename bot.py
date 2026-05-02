@@ -93,7 +93,8 @@ def get_usuario_por_nombre(nombre: str) -> dict | None:
     result = supabase.table("usuarios").select("*").execute()
     nombre_lower = nombre.lower().strip()
     for u in (result.data or []):
-        if nombre_lower in u["nombre"].lower():
+        u_lower = u["nombre"].lower()
+        if nombre_lower in u_lower or u_lower in nombre_lower:
             return u
     return None
 
